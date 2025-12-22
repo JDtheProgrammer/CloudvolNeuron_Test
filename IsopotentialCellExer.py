@@ -295,28 +295,39 @@ Rin_sim0 = [0] + Rin_list
 # ---------------------------------------------------------------
 # ΔV vs 1/D (Simulation + Theory)
 # ---------------------------------------------------------------
-ax_relation.plot(X0, delta_v_sim0, "x--", color="blue", label="Simulated ΔV")
-ax_relation.plot(inv_diam_list, deltaV_theory, "o-", label="Theory ∝ 1/D")
+ax_relation.plot(inv_diam_list, deltaV_theory, "o-", 
+                 markeredgewidth = 3, linewidth=2, color=(0.0,0.8,0.0), label="Theory ∝ 1/D")
+ax_relation.plot(inv_diam_list, delta_v_list, "x--",
+                 markersize=15, linewidth=2, color=(0.8,0.2,0.8), label="Simulated ΔV",
+                 markevery=slice(1, None))
 
 ax_relation.set_title("Peak Voltage vs 1/Diameter")
 ax_relation.set_xlabel("1 / Diameter (1/µm)")
 ax_relation.set_ylabel("Peak Voltage ΔV (mV)")
 ax_relation.grid(True)
 ax_relation.legend(fontsize=8)
+ax_relation.set_xlim(0, max(inv_diam_list)*1.05)
+ax_relation.set_ylim(0, max(delta_v_list)*1.02)
 
 # ---------------------------------------------------------------
 # Rin vs 1/D (Simulation + Theory)
 # ---------------------------------------------------------------
 RN_theory = [Rin_list[0] * (inv_d / inv_diam_list[0]) for inv_d in inv_diam_list]
 
-ax_RNDiamRelation.plot(X0, Rin_sim0, "x--", color="purple", label="Simulated Rin")
-ax_RNDiamRelation.plot(inv_diam_list, RN_theory, "o-", label="Theory ∝ 1/D")
+ax_RNDiamRelation.plot(inv_diam_list, RN_theory, "o-", 
+                       markeredgewidth = 3, linewidth=2, color=(0.8,0.0,0.0), label="Theory ∝ 1/D")
+ax_RNDiamRelation.plot(inv_diam_list, Rin_list, "x--", linewidth=2,markersize=15, color=(0.2,0.8,0.8), 
+                       label="Simulated Rin",
+                       markevery=slice(1, None))
 
 ax_RNDiamRelation.set_title("Input Resistance vs 1/Diameter")
 ax_RNDiamRelation.set_xlabel("1 / Diameter (1/µm)")
 ax_RNDiamRelation.set_ylabel("Rin (Ω)")
 ax_RNDiamRelation.grid(True)
 ax_RNDiamRelation.legend(fontsize=8)
+ax_RNDiamRelation.set_xlim(0, max(inv_diam_list)*1.05)
+ax_RNDiamRelation.set_ylim(0, max(Rin_list)*1.02)
+
 
 # ---------------------------------------------------------------
 # Linear Regression (NumPy) — ΔV
@@ -329,7 +340,8 @@ slope, intercept = np.polyfit(X, y, 1) # y= a_1 + a_0 -> slope = a_1, intercept 
 #   Result example: slope ≈ 5.97–6.00    intercept ≈ 0.01 (numerical noise)
 y_pred = slope * X + intercept
 
-ax_relation_reg.plot(X0, delta_v_sim0, "o", color="blue", label="Simulated")
+ax_relation_reg.plot(X0, delta_v_sim0, "o-", color="blue", label="Simulated",
+                     markevery=slice(1, None))
 ax_relation_reg.plot([0] + list(X),
                      [intercept] + list(y_pred),
                      "r--",
@@ -348,7 +360,8 @@ y_rin = np.array(Rin_list)
 slope_rin, intercept_rin = np.polyfit(X, y_rin, 1)
 y_rin_pred = slope_rin * X + intercept_rin
 
-ax_RN_reg.plot(X0, Rin_sim0, "o", color="purple", label="Simulated")
+ax_RN_reg.plot(X0, Rin_sim0, "o-", color="purple", label="Simulated",
+               markevery=slice(1, None))
 ax_RN_reg.plot([0] + list(X),
                [intercept_rin] + list(y_rin_pred),
                "r--",
@@ -363,8 +376,10 @@ ax_RN_reg.legend(fontsize=8)
 plt.tight_layout()
 plt.show(block=False)
 #save from code
-# no markers at zero for regression lines
-# get rid of extension at origin for 2 COLUMN GRAPHS
+# no markers at zero for regression lines (accomplished)
+# get rid of extension at origin for 2 COLUMN GRAPHS (accomplished)
+
+
 #----------------------------------------------------------------------------------------
 #                                 3. verying Resistivity
 #----------------------------------------------------------------------------------------
@@ -387,14 +402,18 @@ iclamp.delay = 0
 iclamp.dur = 15
 iclamp.amp = amp
 
-fig3, ax = plt.subplots(2, 2, figsize=(14, 10))
+fig3, ax = plt.subplots(2, 3, figsize=(18, 10))
 
 ax_volt3 = ax[0, 0 ] # left plot for voltage
-ax_Rm = ax[0, 1 ]   # right plot for Rm bar graph
-ax_relation3 = ax[1, 0 ] # bottom left for relation plot
+ax_Rm = ax[1, 0]   # right plot for Rm bar graph
+ax_relation3 = ax[0, 1 ] # bottom left for relation plot
 ax_Rin = ax[1, 1 ]    # bottom right (unused)
+ax_relation3_reg = ax[0, 2 ] # bottom left for regression
+ax_RN_reg = ax[1, 2 ]    # bottom right for regression
 
 
+# Run simulation for different resistivities
+#---------------------------------------------------------------
 Rin_values = []  # store Rin values for printing
 
 delta_v_Rm = []  # store ΔV for each Rm
@@ -441,8 +460,8 @@ ax_volt3.set_title("Voltage Response vs Membrane Resistivity (Rm)")
 ax_volt3.legend(fontsize=8)
 ax_volt3.grid(True)
 
-# Right plot: Relationship between voltage and Rm
-
+# 2row-1cul: Relationship between voltage and Rm
+#---------------------------------------------------------------
 ax_Rm.bar(range(len(Rm_values)), # bars of range of the length of diam_values_um
     Rm_values, color=colors, tick_label=[f"{Rm:.1f}" for Rm in Rm_values])
 
@@ -452,8 +471,8 @@ ax_Rm.set_title("Resistivities Used in Simulation")
 ax_Rm.grid(True, axis='y')
 print(soma.cm)
 
-# Bottom-left: ΔV vs Rm
-
+# 1Row-2cul: ΔV vs Rm
+#---------------------------------------------------------------
 # compute theoretical ΔV
 d_cm = soma.diam * 1e-4          # µm → cm
 L_cm = soma.L * 1e-4             # µm → cm
@@ -497,8 +516,8 @@ ax_relation3.legend(fontsize=8)
 ax_relation3.set_xlim(0, max(Rm_values)*1.1)
 ax_relation3.set_ylim(0, max(delta_v_Rm)*1.02)  
 
-# Bottom-right: Linearized Rin vs Rm (slope = 1/A)
-
+# 2row-2cul: Linearized Rin vs Rm (slope = 1/A)
+#---------------------------------------------------------------
 # Compute soma area in cm²
 d_cm = soma.diam * 1e-4   # µm → cm
 L_cm = soma.L * 1e-4
@@ -530,7 +549,45 @@ ax_Rin.set_title("Input Resistance vs Membrane Resistivity (Linearized)")
 ax_Rin.grid(True)
 ax_Rin.legend(fontsize=8)
 
+# 1row-3cul: Linear Regression (NumPy) — ΔV vs Rm
+#---------------------------------------------------------------
+X = np.array(Rm_values_list)
+y = np.array(delta_v_Rm)
+slope, intercept = np.polyfit(X, y, 1) # y= a_1 + a_0 -> slope = a_1, intercept = a_0
+y_pred = slope * X + intercept # y_pred: this is the predicted y value based on the slope and intercept
+# Plot simulated ΔV vs Rm with regression line
+ax_relation3_reg.plot(
+    X, y_pred,
+    "g--", linewidth=2,
+    label=f"Regression line: y = {slope:.2e}x + {intercept:.2e}"
+)
+ax_relation3_reg.set_xlabel("Membrane Resistivity (Ω·cm²)")
+ax_relation3_reg.set_ylabel("Peak Voltage ΔV (mV)") 
+ax_relation3_reg.set_title("Regression: Peak Voltage vs Membrane Resistivity")
+ax_relation3_reg.grid(True)
+ax_relation3_reg.legend(fontsize=8)
+ax_relation3_reg.set_xlim(0, max(Rm_values)*1.1)
+ax_relation3_reg.set_ylim(0, max(delta_v_Rm)*1.02
+)
 
+# 2row-3cul: Linear Regression (NumPy) — Rin vs Rm
+#---------------------------------------------------------------
+y_rin = np.array(Rin_values)
+slope_rin, intercept_rin = np.polyfit(X, y_rin, 1)
+y_rin_pred = slope_rin * X + intercept_rin
+# Plot simulated Rin vs Rm with regression line
+ax_RN_reg.plot(
+    X, y_rin_pred,  # regression line
+    "r--", linewidth=2, # regression line
+    label=f"Regression line: y = {slope_rin:.2e}x + {intercept_rin:.2e}"
+)   # regression line
+ax_RN_reg.set_xlabel("Membrane Resistivity (Ω·cm²)")  # x-axis label
+ax_RN_reg.set_ylabel("Input Resistance Rin (Ω)")  # y-axis label   
+ax_RN_reg.set_title("Regression: Input Resistance vs Membrane Resistivity")  #  title
+ax_RN_reg.grid(True)  # grid lines 
+ax_RN_reg.legend(fontsize=8)  # legend
+ax_RN_reg.set_xlim(0, max(Rm_values)*1.1)
+ax_RN_reg.set_ylim(0, max(Rin_values)*1.1)
 
 plt.tight_layout()
 plt.show(block=False)
