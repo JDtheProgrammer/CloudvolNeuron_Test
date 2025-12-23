@@ -50,6 +50,18 @@ colors = ["green", "blue", "red", "black"]
 amps = [(0.075) * k for k in range(1, 5)]
 v_rest = -70 # mV
 
+# Surface area in cm²
+A = math.pi * (diam*1e-4) * (L*1e-4)  # um → cm
+
+#Resisitvity and resistance calculation
+Rm = 1 / soma(0.5).pas.g  # Ω·cm²
+Rn = Rm / A  # Ω
+
+# Convert amps from nA to A
+amps_A = np.array(amps) * 1e-6  # nA → mA
+v_theoretical = amps_A * Rn  # mV
+
+
 # Create figure with 1 row and 2 columns (side by side)
 fig, (ax_volt, ax_pulse, ax_relation) = plt.subplots(1, 3, figsize=(18, 5))
 
@@ -80,16 +92,6 @@ for amp, color in zip(amps, colors):
     delta_v = abs(v_max - v_rest)
     v_sim.append(delta_v)
 
-    # Surface area in cm²
-    A = math.pi * (diam*1e-4) * (L*1e-4)  # um → cm
-
-    Rm = 1 / soma(0.5).pas.g  # Ω·cm²
-    Rn = Rm / A  # Ω
-
-    # Convert amps from nA to A
-    amps_A = np.array(amps) * 1e-6  # nA → mA
-    v_theoretical = amps_A * Rn  # mV
-
     print(f"Amperages = {amp:.3f} nA → ΔV = {delta_v:.2f} mV (Max V = {v_max:.2f} mV)")
     
 ax_volt.set_xlim(0, 25)
@@ -100,70 +102,6 @@ ax_volt.set_title("Soma Voltage vs Time")
 ax_volt.legend(fontsize=8)
 ax_volt.grid(True)
 
-# ✅ RIGHT SIDE: 2×2 grid of pulse inputs (subplots)
-'''# Create a 2x2 grid INSIDE the right-side subplot (ax_pulse)
-# ------------------------------------------------------
-# 1️⃣ ax_pulse.get_subplotspec() gets the "layout spec" of the current subplot ax_pulse
-# 2️⃣ .subgridspec(2, 2, hspace=0.4, wspace=0.3)
-#     subdivides ax_pulse into a 2×2 grid of smaller axes (with spacing)
-#     - hspace: vertical spacing between rows
-#     - wspace: horizontal spacing between columns
-gs = ax_pulse.get_subplotspec().subgridspec(2, 2, hspace=0.4, wspace=0.3)
-
-# Create a list of the 4 new subplot axes using list comprehension
-# fig.add_subplot(gs[i, j]) adds a subplot at grid position (i, j)
-# for i in range(2) → rows 0,1
-# for j in range(2) → columns 0,1
-# The result: pulse_axes = [ax(0,0), ax(0,1), ax(1,0), ax(1,1)]
-pulse_axes = [fig.add_subplot(gs[i, j]) for i in range(2) for j in range(2)]
-
-# Loop through all current amperages and colors
-# enumerate gives both index (idx = 0..3) and value (amp)
-
-for idx, (amp, color) in enumerate(zip(amps, colors)):
-    # Create a 1D array of time values from 0 to 25 ms with 500 points
-    t_array = np.linspace(0, 25, 500)
-     # Create a square pulse (unit step function)
-    # np.where(condition, value_if_true, value_if_false)
-    # → For time between iclamp.delay and iclamp.delay + iclamp.dur:
-    #     pulse = amp
-    #   otherwise:
-    #     pulse = 0
-    pulse = np.where((t_array >= iclamp.delay) & (t_array < iclamp.delay + iclamp.dur), amp, 0)
-
-    # Plot this pulse in its corresponding mini subplot
-    pulse_axes[idx].plot(t_array, pulse, color=color, linewidth=2)
-
-    # Add a small title showing the amplitude
-    pulse_axes[idx].set_title(f"amp={amp:.3f} nA", fontsize=8)
-
-    # Set y-axis limit so all pulses fit nicely (20% padding above max)
-    pulse_axes[idx].set_ylim(0, max(amps) * 1.2)
-
-# Turn on grid lines for better readability
-    pulse_axes[idx].grid(True)
-
-    # Add axis labels selectively:
-    # bottom row subplots (idx 2 or 3) get x-label
-    if idx >= 2:
-        pulse_axes[idx].set_xlabel("Time (ms)", fontsize=8)
-
-    # left column subplots (idx 0 or 2) get y-label
-    if idx % 2 == 0:
-        pulse_axes[idx].set_ylabel("Current (nA)", fontsize=8)
-
-# Add a big shared title for the entire figure
-fig.suptitle("Voltage Response and Input Pulses", fontsize=14)
-
-# Adjust subplot layout to prevent overlaps
-plt.tight_layout()
-
-# Display the full figure (left = voltages, right = 4 pulse plots)
-plt.show(block=False)
-
-# RIGHT PLOT: Unit Step Functions (2x2 grid)
-# Create sub-axes within the right subplot
-#print(soma.Ra)'''
 
 # Right side superimposed plot of all pulses
 
@@ -180,17 +118,38 @@ ax_pulse.set_title("Input Current Pulses (Superimposed)")
 ax_pulse.grid(True)
 ax_pulse.legend(fontsize=8)
 
+# linear regression for section 1
+#------------------------------------------------------------------
+# Calculate slope (m) and intercept (b) using numpy's polyfit
+coefficients = np.polyfit(amps, v_sim, 1)  # degree=1 for linear fit
+slope = coefficients[0]
+intercept = coefficients[1]
+
+# Generate regression line points
+x_regression = np.linspace(0, max(amps), 100)
+y_regression = slope * x_regression + intercept
+
+# Calculate R² value
+correlation_matrix = np.corrcoef(amps, v_sim)
+correlation = correlation_matrix[0, 1]
+r_squared = correlation**2
+
+print(f"\nLinear Regression Results:")
+print(f"Slope: {slope:.4f} mV/nA")
+print(f"Intercept: {intercept:.4f} mV")
+print(f"R² value: {r_squared:.6f}")
+print(f"Equation: ΔV = {slope:.4f} * I + {intercept:.4f}")
 
 # Relationship Graph Voltage vs. Current pulse
 # Prepend 0 to start from origin
-x_stem = amps                   # Injected current (nA)
-v_sim_stem = v_sim              # Experimental ΔV
-v_theoretical_stem = list(v_theoretical)  # Theoretical ΔV
-ax_relation.set_xlim(0, max(x_stem)*1.015)
-ax_relation.set_ylim(0, max(v_sim_stem)*1.02)
-ax_relation.plot(x_stem, v_sim_stem, 'o-', label='Experimental',
-                 color='blue', linewidth=2, markersize=8)
-ax_relation.plot(x_stem, v_theoretical_stem, 'r--', label='Theoretical', linewidth=2)
+ax_relation.set_xlim(0, max(amps) * 1.2)
+ax_relation.set_ylim(0, max(max(v_sim), max(v_theoretical))*1.2)
+ax_relation.plot(amps, v_theoretical, 'r--', label='Theoretical', linewidth=4, 
+                  linestyle=(0, (2, 2)))  # (offset, (dash_length, gap_length))
+ax_relation.plot(amps, v_sim, 'o', label='Experimental',
+                 color='blue', linewidth=4, markersize=9)
+ax_relation.plot(x_regression, y_regression, 'b-', label=f'Linear Fit (R²={r_squared:.4f})', 
+                 linewidth=2, alpha=0.7)
 ax_relation.set_xlabel("Injected Current (nA)")
 ax_relation.set_ylabel("Peak Voltage Difference (mV)")
 ax_relation.set_title("Peak Voltage Difference vs Injected Current")
@@ -199,8 +158,6 @@ ax_relation.legend(fontsize=8)
 plt.tight_layout()
 plt.show(block=False)
 print(soma.L)
-
-
 #----------------------------------------------------------------------------------------
 # Section 2: Varying Diameters + Linear Regression (Transposed Layout)
 #----------------------------------------------------------------------------------------
@@ -757,3 +714,5 @@ plt.show()
 #-------------------------------------------------------------------------------------------
 #                                Testing from JD's computer
 #-------------------------------------------------------------------------------------------
+
+# It seems as if the repo commmtting Process is operating as intended.43ersdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdsdtree
