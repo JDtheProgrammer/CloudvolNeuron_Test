@@ -34,14 +34,14 @@ iclamp.amp = 0.9
 soma.insert('pas') # insert passive properties
 #print(soma(0.5).pas.g)
 #print(soma(0.5).pas.e)
-soma(0.5).pas.g = 0.002  # S/cm²
-Rm = 1 / soma(0.5).pas.g  # Ω-cm²
+soma(0.5).pas.g = 0.002  # sets conductance in S/cm²
+Rm = 1 / soma(0.5).pas.g # set resistance to 500 # Ω-cm²
 #print(soma(0.5).pas.g)
-soma(0.5).pas.e = -70  
+soma(0.5).pas.e = -70   # Set reversal potential
 #print(", ".join(item for item in dir(neuron) if not item.startswith("__")))
 #print(vars(pas))
 #print(soma.insert('pas'))
-soma.L = 20 * um  # µm
+soma.L = 20 * um  # sets length of soma to 20 µm
 L = soma.L 
 v_sim = [] 
 
@@ -59,9 +59,8 @@ Rn = Rm / A  # Ω
 
 # Convert amps from nA to A
 amps_A = np.array(amps) * 1e-6  # nA → mA
-v_theoretical = amps_A * Rn  # mV
-
-
+amps_theoretical = np.linspace(0,0.35,20)
+v_theoretical = amps_theoretical * Rn *1e-6 # mV
 # Create figure with 1 row and 2 columns (side by side)
 fig, (ax_volt, ax_pulse, ax_relation) = plt.subplots(1, 3, figsize=(18, 5))
 
@@ -72,11 +71,11 @@ for amp, color in zip(amps, colors):
     iclamp.amp = amp # to introduce the amperage in the simulation
     
     # Recreate recording vectors for each simulation
-    v = n.Vector().record(soma(0.5)._ref_v)
-    t = n.Vector().record(n._ref_t)
+    v = n.Vector().record(soma(0.5)._ref_v)  # ← Records voltage
+    t = n.Vector().record(n._ref_t)          # ← Records time
     
-    n.finitialize(v_rest * mV)
-    n.continuerun(25 * ms)
+    n.finitialize(v_rest * mV)  # ← Initialize simulation at resting potential
+    n.continuerun(25 * ms)      # ← **RUN THE SIMULATION for 25 ms**
     
     # Plot voltage on left subplot
     ax_volt.plot(list(t), list(v), color=color, linewidth=2, 
@@ -84,7 +83,7 @@ for amp, color in zip(amps, colors):
     
     v_list = list(v)
     t_list = list(t)
-    ax_volt.plot(t_list, v_list, color=color, linewidth=2, label=f"amp={amp:.3f} nA")
+    ax_volt.plot(t_list, v_list, color=color, linewidth=4, label=f"amp={amp:.3f} nA")
 
     # ✅ Find absolute voltage deflection
     
@@ -93,7 +92,8 @@ for amp, color in zip(amps, colors):
     v_sim.append(delta_v)
 
     print(f"Amperages = {amp:.3f} nA → ΔV = {delta_v:.2f} mV (Max V = {v_max:.2f} mV)")
-    
+tau = Rm * soma.cm # time constant in ms where some.cm is in uF/cm²
+print(f"Time constant τ = {tau:.2f} ms")
 ax_volt.set_xlim(0, 25)
 #ax_volt.set_ylim(-75, 5000)
 ax_volt.set_xlabel("Time (ms)")
@@ -108,7 +108,7 @@ ax_volt.grid(True)
 t_array = np.linspace(0, 25, 500)
 for amp, color in zip(amps, colors):
     pulse = np.where((t_array >= iclamp.delay) & (t_array < iclamp.delay + iclamp.dur), amp, 0)
-    ax_pulse.plot(t_array, pulse, color=color, linewidth=2, label=f"amp={amp:.3f} nA")
+    ax_pulse.plot(t_array, pulse, color=color, linewidth=4, label=f"amp={amp:.3f} nA")
 
 ax_pulse.set_xlim(0, 25)
 ax_pulse.set_ylim(0, max(amps) * 1.2)
@@ -116,7 +116,7 @@ ax_pulse.set_xlabel("Time (ms)")
 ax_pulse.set_ylabel("Current (nA)")
 ax_pulse.set_title("Input Current Pulses (Superimposed)")
 ax_pulse.grid(True)
-ax_pulse.legend(fontsize=8)
+ax_pulse.legend(fontsize=11)
 
 # linear regression for section 1
 #------------------------------------------------------------------
@@ -143,18 +143,20 @@ print(f"Equation: ΔV = {slope:.4f} * I + {intercept:.4f}")
 # Relationship Graph Voltage vs. Current pulse
 # Prepend 0 to start from origin
 ax_relation.set_xlim(0, max(amps) * 1.2)
-ax_relation.set_ylim(0, max(max(v_sim), max(v_theoretical))*1.2)
-ax_relation.plot(amps, v_theoretical, 'r--', label='Theoretical', linewidth=4, 
-                  linestyle=(0, (2, 2)))  # (offset, (dash_length, gap_length))
+ax_relation.set_ylim(0, max(v_sim) * 1.2)
+ax_relation.plot(x_regression, y_regression, '-', color='black',
+                  label=f'Linear Fit (R²={r_squared:.4f})', 
+                 linewidth=4, alpha=1)
 ax_relation.plot(amps, v_sim, 'o', label='Experimental',
                  color='blue', linewidth=4, markersize=9)
-ax_relation.plot(x_regression, y_regression, 'b-', label=f'Linear Fit (R²={r_squared:.4f})', 
-                 linewidth=2, alpha=0.7)
+ax_relation.plot(amps_theoretical, v_theoretical, 'x',color='red', label='Theoretical', linewidth=6,
+                 markersize=9) 
+                 # linestyle=(0, (2, 2)))  # (offset, (dash_length, gap_length))
 ax_relation.set_xlabel("Injected Current (nA)")
 ax_relation.set_ylabel("Peak Voltage Difference (mV)")
 ax_relation.set_title("Peak Voltage Difference vs Injected Current")
 ax_relation.grid(True)
-ax_relation.legend(fontsize=8)
+ax_relation.legend(fontsize=11)
 plt.tight_layout()
 plt.show(block=False)
 print(soma.L)
@@ -210,7 +212,7 @@ for d, color in zip(diameters, colors):
 ax_volt.set_title("Soma Voltage vs Time")
 ax_volt.set_xlabel("Time (ms)")
 ax_volt.set_ylabel("Voltage (mV)")
-ax_volt.legend(fontsize=8)
+ax_volt.legend(fontsize=11)
 ax_volt.grid(True)
 
 # ---------------------------------------------------------------
@@ -226,115 +228,119 @@ ax_diam.set_ylabel("Diameter (µm)")
 ax_diam.grid(True, axis='y')
 
 # ---------------------------------------------------------------
-# Compute geometry + theory
+# Compute geometry + theory - FIXED
 # ---------------------------------------------------------------
-L_cm = soma.L * 1e-4
-diam_cm_list = [d * 1e-4 for d in diam_um_list]
-A_list = [np.pi * d * L_cm for d in diam_cm_list]
+L_cm = soma.L * 1e-4  # µm → cm
+diam_cm_list = [d * 1e-4 for d in diam_um_list]  # µm → cm
+A_list = [np.pi * d * L_cm for d in diam_cm_list]  # cm²
 
-Rin_list = [1/soma(0.5).pas.g / A for A in A_list]
-I_amp = amp * 1e-9
-deltaV_theory = [I_amp * Rin * 1000 for Rin in Rin_list]
+Rin_list = [1/soma(0.5).pas.g / A for A in A_list]  # Ω
+I_amp = amp * 1e-9  # nA → A
 
-inv_diam_list = [1/d for d in diam_um_list]
-# Extend both lists with origin (0,0)
-inv_diam_ext = [0] + list(inv_diam_list)
-delta_v_ext  = [0] + list(delta_v_list)
-Rin_ext      = [0] + list(Rin_list)
+inv_diam_list = [1/d for d in diam_um_list]  # 1/µm
 
-# ---------------------------------------------------------------
-# ADD ORIGIN EXTENSION FOR SIMULATION + REGRESSION ONLY
-# ---------------------------------------------------------------
-X0 = [0] + inv_diam_list
-delta_v_sim0 = [0] + delta_v_list
-Rin_sim0 = [0] + Rin_list
+# CREATE INDEPENDENT THEORETICAL CURVES (starting from 0)
+inv_diam_theory = np.linspace(0, max(inv_diam_list)*1.1, 20)  # 1/µm
 
+# Theory: Rin = Rm / (π × d × L)
+# inv_diam is in (1/µm), but formula needs (1/cm)
+# So: Rin = Rm / (π × L) × (1/d_cm) = Rm / (π × L) × (1/d_µm) × (1e4)
+Rm = 1 / soma(0.5).pas.g  # Ω·cm²
+k_Rin = Rm / (np.pi * L_cm) * 1e4  # Ω·µm (multiply by 1e4 to convert 1/cm to 1/µm)
+Rin_theory = k_Rin * inv_diam_theory  # Ω
+
+# Theory: ΔV = I × Rin (in mV)
+k_deltaV = I_amp * k_Rin * 1000  # A × Ω·µm × (mV/V) = mV·µm
+deltaV_theory = k_deltaV * inv_diam_theory  # mV
+# After calculating the theory, add these prints:
+#print(f"\nDEBUG INFO:")
+#print(f"L_cm = {L_cm}")
+#print(f"Rm = {Rm}")
+#print(f"I_amp = {I_amp}")
+#print(f"k_Rin = {k_Rin}")
+#print(f"k_deltaV = {k_deltaV}")
+#print(f"\ninv_diam_list = {inv_diam_list}")
+#print(f"delta_v_list = {delta_v_list}")
+#print(f"Rin_list = {Rin_list}")
+#print(f"\ninv_diam_theory[:5] = {inv_diam_theory[:5]}")
+#print(f"deltaV_theory[:5] = {deltaV_theory[:5]}")
+#print(f"Rin_theory[:5] = {Rin_theory[:5]}")
 # ---------------------------------------------------------------
-# ΔV vs 1/D (Simulation + Theory)
+# ΔV vs 1/D (Simulation points + Theory line)
 # ---------------------------------------------------------------
-ax_relation.plot(inv_diam_list, deltaV_theory, "o-", 
-                 markeredgewidth = 3, linewidth=2, color=(0.0,0.8,0.0), label="Theory ∝ 1/D")
-ax_relation.plot(inv_diam_list, delta_v_list, "x--",
-                 markersize=15, linewidth=2, color=(0.8,0.2,0.8), label="Simulated ΔV",
-                 markevery=slice(1, None))
+ax_relation.plot(inv_diam_theory, deltaV_theory, "x", markersize=10,
+                 linewidth=2, color=(0.0,0.8,0.0), label="Theoretical ∝ 1/D")
+ax_relation.plot(inv_diam_list, delta_v_list, "o",
+                 markersize=11, markeredgewidth=3, color=(0.8,0.2,0.8), 
+                 label="Simulated ΔV", linestyle='None')
 
 ax_relation.set_title("Peak Voltage vs 1/Diameter")
 ax_relation.set_xlabel("1 / Diameter (1/µm)")
 ax_relation.set_ylabel("Peak Voltage ΔV (mV)")
 ax_relation.grid(True)
-ax_relation.legend(fontsize=8)
-ax_relation.set_xlim(0, max(inv_diam_list)*1.05)
-ax_relation.set_ylim(0, max(delta_v_list)*1.02)
+ax_relation.legend(fontsize=11)
 
 # ---------------------------------------------------------------
-# Rin vs 1/D (Simulation + Theory)
+# Rin vs 1/D (Simulation points + Theory line)
 # ---------------------------------------------------------------
-RN_theory = [Rin_list[0] * (inv_d / inv_diam_list[0]) for inv_d in inv_diam_list]
-
-ax_RNDiamRelation.plot(inv_diam_list, RN_theory, "o-", 
-                       markeredgewidth = 3, linewidth=2, color=(0.8,0.0,0.0), label="Theory ∝ 1/D")
-ax_RNDiamRelation.plot(inv_diam_list, Rin_list, "x--", linewidth=2,markersize=15, color=(0.2,0.8,0.8), 
-                       label="Simulated Rin",
-                       markevery=slice(1, None))
+ax_RNDiamRelation.plot(inv_diam_theory, Rin_theory, "x", markersize=10,
+                       linewidth=2, color=(0.8,0.0,0.0), label="Theoretical ∝ 1/D")
+ax_RNDiamRelation.plot(inv_diam_list, Rin_list, "o", 
+                       markersize=11, markeredgewidth=3, color=(0.2,0.8,0.8), 
+                       label="Simulated Rin", linestyle='None')
 
 ax_RNDiamRelation.set_title("Input Resistance vs 1/Diameter")
 ax_RNDiamRelation.set_xlabel("1 / Diameter (1/µm)")
 ax_RNDiamRelation.set_ylabel("Rin (Ω)")
 ax_RNDiamRelation.grid(True)
-ax_RNDiamRelation.legend(fontsize=8)
-ax_RNDiamRelation.set_xlim(0, max(inv_diam_list)*1.05)
-ax_RNDiamRelation.set_ylim(0, max(Rin_list)*1.02)
-
+ax_RNDiamRelation.legend(fontsize=11)
 
 # ---------------------------------------------------------------
-# Linear Regression (NumPy) — ΔV
+# Linear Regression — ΔV (NO FAKE ORIGIN)
 # ---------------------------------------------------------------
 X = np.array(inv_diam_list)
 y = np.array(delta_v_list)
 
-slope, intercept = np.polyfit(X, y, 1) # y= a_1 + a_0 -> slope = a_1, intercept = a_0
-#   np.polyfit does a least-squares linear fit: y = slope * X + intercept
-#   Result example: slope ≈ 5.97–6.00    intercept ≈ 0.01 (numerical noise)
-y_pred = slope * X + intercept
+slope, intercept = np.polyfit(X, y, 1)
+X_fit = np.linspace(0, max(inv_diam_list)*1.1, 100)
+y_fit = slope * X_fit + intercept
 
-ax_relation_reg.plot(X0, delta_v_sim0, "o-", color="blue", label="Simulated",
-                     markevery=slice(1, None))
-ax_relation_reg.plot([0] + list(X),
-                     [intercept] + list(y_pred),
-                     "r--",
-                     label=f"Fit slope={slope:.2f}, \nintercept={intercept:.2e}")
+ax_relation_reg.plot(inv_diam_list, delta_v_list, "o", 
+                     markersize=10, color="blue", label="Simulated")
+ax_relation_reg.plot(X_fit, y_fit, "r--", linewidth=2,
+                     label=f"Fit: y={slope:.2f}x + {intercept:.2e}")
 
 ax_relation_reg.set_title("Regression: ΔV vs 1/D")
 ax_relation_reg.set_xlabel("1 / Diameter (1/µm)")
 ax_relation_reg.set_ylabel("ΔV (mV)")
 ax_relation_reg.grid(True)
-ax_relation_reg.legend(fontsize=8)
+ax_relation_reg.legend(fontsize=11)
 
 # ---------------------------------------------------------------
-# Linear Regression (NumPy) — Rin
+# Linear Regression — Rin (NO FAKE ORIGIN)
 # ---------------------------------------------------------------
 y_rin = np.array(Rin_list)
 slope_rin, intercept_rin = np.polyfit(X, y_rin, 1)
-y_rin_pred = slope_rin * X + intercept_rin
+y_rin_fit = slope_rin * X_fit + intercept_rin
 
-ax_RN_reg.plot(X0, Rin_sim0, "o-", color="purple", label="Simulated",
-               markevery=slice(1, None))
-ax_RN_reg.plot([0] + list(X),
-               [intercept_rin] + list(y_rin_pred),
-               "r--",
-               label=f"Fit slope={slope_rin:.2e}")
+ax_RN_reg.plot(inv_diam_list, Rin_list, "o", 
+               markersize=10, color="purple", label="Simulated")
+ax_RN_reg.plot(X_fit, y_rin_fit, "r--", linewidth=2,
+               label=f"Fit: y={slope_rin:.2e}x + {intercept_rin:.2e}")
 
 ax_RN_reg.set_title("Regression: Rin vs 1/D")
 ax_RN_reg.set_xlabel("1 / Diameter (1/µm)")
 ax_RN_reg.set_ylabel("Rin (Ω)")
 ax_RN_reg.grid(True)
-ax_RN_reg.legend(fontsize=8)
+ax_RN_reg.legend(fontsize=11)
 
 plt.tight_layout()
+
 plt.show(block=False)
 #save from code
 # no markers at zero for regression lines (accomplished)
 # get rid of extension at origin for 2 COLUMN GRAPHS (accomplished)
+# Simulation settings
 
 
 #----------------------------------------------------------------------------------------
@@ -414,7 +420,7 @@ ax_volt3.set_xlim(0, 25)
 ax_volt3.set_xlabel("Time (ms)")
 ax_volt3.set_ylabel("Voltage (mV)")
 ax_volt3.set_title("Voltage Response vs Membrane Resistivity (Rm)")
-ax_volt3.legend(fontsize=8)
+ax_volt3.legend(fontsize=11)
 ax_volt3.grid(True)
 
 # 2row-1cul: Relationship between voltage and Rm
@@ -469,7 +475,7 @@ ax_relation3.set_xlabel("Membrane Resistivity (Ω·cm²)")
 ax_relation3.set_ylabel("Peak Voltage ΔV (mV)")
 ax_relation3.set_title("Peak Voltage vs Diameter (Sim vs Theory)")
 ax_relation3.grid(True)
-ax_relation3.legend(fontsize=8)
+ax_relation3.legend(fontsize=11)
 ax_relation3.set_xlim(0, max(Rm_values)*1.1)
 ax_relation3.set_ylim(0, max(delta_v_Rm)*1.02)  
 
@@ -504,7 +510,7 @@ ax_Rin.set_xlabel("Membrane Resistivity Rm (Ω·cm²)")
 ax_Rin.set_ylabel("Input Resistance Rin (Ω)")
 ax_Rin.set_title("Input Resistance vs Membrane Resistivity (Linearized)")
 ax_Rin.grid(True)
-ax_Rin.legend(fontsize=8)
+ax_Rin.legend(fontsize=11)
 
 # 1row-3cul: Linear Regression (NumPy) — ΔV vs Rm
 #---------------------------------------------------------------
@@ -522,7 +528,7 @@ ax_relation3_reg.set_xlabel("Membrane Resistivity (Ω·cm²)")
 ax_relation3_reg.set_ylabel("Peak Voltage ΔV (mV)") 
 ax_relation3_reg.set_title("Regression: Peak Voltage vs Membrane Resistivity")
 ax_relation3_reg.grid(True)
-ax_relation3_reg.legend(fontsize=8)
+ax_relation3_reg.legend(fontsize=11)
 ax_relation3_reg.set_xlim(0, max(Rm_values)*1.1)
 ax_relation3_reg.set_ylim(0, max(delta_v_Rm)*1.02
 )
@@ -542,7 +548,7 @@ ax_RN_reg.set_xlabel("Membrane Resistivity (Ω·cm²)")  # x-axis label
 ax_RN_reg.set_ylabel("Input Resistance Rin (Ω)")  # y-axis label   
 ax_RN_reg.set_title("Regression: Input Resistance vs Membrane Resistivity")  #  title
 ax_RN_reg.grid(True)  # grid lines 
-ax_RN_reg.legend(fontsize=8)  # legend
+ax_RN_reg.legend(fontsize=11)  # legend
 ax_RN_reg.set_xlim(0, max(Rm_values)*1.1)
 ax_RN_reg.set_ylim(0, max(Rin_values)*1.1)
 
@@ -611,7 +617,7 @@ ax_volt4.set_xlim(0, 25)
 ax_volt4.set_xlabel("Time (ms)")
 ax_volt4.set_ylabel("Voltage (mV)")
 ax_volt4.set_title("Voltage Response vs Membrane Capacitance (Cm)")
-ax_volt4.legend(fontsize=8)
+ax_volt4.legend(fontsize=11)
 ax_volt4.grid(True)
 
 # TOP-RIGHT: Bar plot of Cm values
@@ -665,7 +671,7 @@ ax_relation4.set_xlabel("Membrane Capacitance (µF/cm²)")
 ax_relation4.set_ylabel("Peak Voltage ΔV (mV)")
 ax_relation4.set_title("Peak Voltage vs Membrane Capacitance")
 ax_relation4.grid(True)
-ax_relation4.legend(fontsize=8)
+ax_relation4.legend(fontsize=11)
 ax_relation4.set_xlim(0, max(Cm_values)*1.1)
 ax_relation4.set_ylim(0, max(delta_v_list)*1.02)
 
@@ -692,7 +698,7 @@ ax_tauRelation.set_xlabel("Membrane Capacitance (µF/cm²)")
 ax_tauRelation.set_ylabel("Time Constant τ (ms)")
 ax_tauRelation.set_title("Membrane Time Constant vs Capacitance")
 ax_tauRelation.grid(True)
-ax_tauRelation.legend(fontsize=8)
+ax_tauRelation.legend(fontsize=11)
 ax_tauRelation.set_xlim(0, max(Cm_values)*1.1)
 ax_tauRelation.set_ylim(0, max(tau_list)*1.02)
 
