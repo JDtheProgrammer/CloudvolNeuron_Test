@@ -59,9 +59,9 @@ Rm = 1 / soma(0.5).pas.g  # Ω·cm²
 Rn = Rm / A  # Ω
 
 # Convert amps from nA to A
-amps_A = np.array(amps) * 1e-6  # nA → mA
-amps_theoretical = np.linspace(0,0.35,20)
-v_theoretical = amps_theoretical * Rn *1e-6 # mV
+amps_A = np.array(amps)  # nA → mA
+amps_theoretical = np.linspace(0,0.35,20) 
+v_theoretical = amps_theoretical * Rn * 1e-9*1000 # mV
 # Create figure with 1 row and 2 columns (side by side)
 fig, (ax_volt, ax_pulse, ax_relation) = plt.subplots(1, 3, figsize=(18, 5))
 
@@ -146,7 +146,7 @@ print(f"Equation: ΔV = {slope:.4f} * I + {intercept:.4f}")
 ax_relation.set_xlim(0, max(amps) * 1.2)
 ax_relation.set_ylim(0, max(v_sim) * 1.2)
 ax_relation.plot(x_regression, y_regression, '-', color='black',
-                  label=f'Linear Fit: y={slope:.3f}x + {intercept:.2f}', 
+                  label=f'Linear Fit: y={slope:3e}x + {intercept:.2f}', 
                  linewidth=4, alpha=1)
 ax_relation.plot(amps, v_sim, 'o', label='Experimental',
                  color='blue', linewidth=4, markersize=9)
@@ -633,29 +633,28 @@ for Cm, color in zip(Cm_values, colors):
     v_arr = np.array(v)
 
     # Measured peak (simulated raw max value)
-    V_rest_sim = v_arr[0]
-    dV_measured = v_arr.max() - V_rest_sim
-    peak_dV_sim.append(dV_measured)
+    V_rest_sim = v_arr[0] # This line gets the resting potential from the start of the trace in the form of an array.
+    dV_measured = v_arr.max() - V_rest_sim # this operation gives peak ΔV by subtracting resting potential
+    peak_dV_sim.append(dV_measured) # here append means to add the measured peak ΔV to the list for later plotting
 
     # Fit exponential only to the rising phase (during current pulse)
     mask_pulse = (t_arr >= iclamp.delay) & (t_arr <= iclamp.delay + iclamp.dur)
     if np.sum(mask_pulse) > 20:           # need enough points for reliable fit
-        t_fit = t_arr[mask_pulse]
-        v_fit = v_arr[mask_pulse]
+        t_fit = t_arr[mask_pulse]         # extrancects time from simulation
+        v_fit = v_arr[mask_pulse]         # extracts voltage from simulation
         t_fit -= t_fit[0]                 # shift to start at t=0
         v_fit -= V_rest_sim               # shift to start at 0 mV deflection
 
         # Initial guess: reasonable values based on theory
-        p0 = [0, dV_measured * 0.95, Rm * Cm * 0.001 * 1.1]
-
-        try:
-            # popt stands for optimal parameters
-            popt, _ = curve_fit(charging_func, t_fit, v_fit,
+        p0 = [0, dV_measured * 0.95, Rm * Cm * 0.001 * 1.1] # the 0.95 and 1.1 are just to help the fitting process
+        # the 0.001 factor converts from µF/cm² and Ω·cm² to ms because before the conversion the units are in microseconds
+        try: # the try-except block is used to catch any errors during the fitting process
+            popt, _ = curve_fit(charging_func, t_fit, v_fit, # popt stands for optimal parameters
                                 p0=p0,
                                 bounds=([-np.inf, 0, 0], [np.inf, np.inf, 1000]))
             V0_fit, dV_fit, tau_fit = popt
 
-            tau_fitted.append(tau_fit)
+            tau_fitted.append(tau_fit) 
 
             # Plot smooth fitted curve
             t_smooth = np.linspace(0, iclamp.dur, 200)
@@ -703,7 +702,7 @@ ax_volt.grid(True)
 ax_volt.legend(fontsize=9, loc='lower right')
 
 # B. Peak ΔV vs Cm – should be flat (theoretical line added) + exponential regression
-ax_dV.plot(Cm_values, peak_dV_sim, 'o-', color='navy', markersize=9, lw=1.5,
+ax_dV.plot(Cm_values, peak_dV_sim, 'o', color='navy', markersize=9, lw=1.5, #lw stands for line width
            label="Simulated ΔV")
 ax_dV.axhline(deltaV_theory, color='red', ls='--', lw=2.2,
               label=f"Theory: ΔV = {deltaV_theory:.1f} mV (independent of Cm)")
