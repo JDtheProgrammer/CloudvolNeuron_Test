@@ -23,10 +23,10 @@ n.load_file("stdrun.hoc") # For higher-level simulation control specification,
 
 iclamp = n.IClamp(soma(0.5)) # create an IClamp object at the center of the soma
 
-iclamp.delay = 0
-iclamp.dur = 15
-iclamp.amp = 0.9
-
+iclamp.delay = 0 #ms
+iclamp.dur = 15 #ms
+iclamp.amp = 0.9 #nA
+ 
 #----------------------------------------------------------------------------------------
 #                                 1. verying Current Pulses
 #----------------------------------------------------------------------------------------
@@ -190,7 +190,7 @@ fig2, ax = plt.subplots(2, 2, figsize=(14, 10))
 ax_volt = ax[0, 0]            # Voltage vs time
 ax_diam = ax[1, 0]            # Diameter bar plot
 ax_relation = ax[0, 1]        # ΔV vs 1/D
-ax_RNDiamRelation = ax[1, 1]  # Rin vs 1/D
+ax_RNDiamRelation = ax[1, 1]  # RN vs 1/D
 
 # ---------------------------------------------------------------
 # Run simulations for different diameters
@@ -242,7 +242,7 @@ L_cm = soma.L * 1e-4  # µm → cm
 diam_cm_list = [d * 1e-4 for d in diam_um_list]  # µm → cm
 A_list = [np.pi * d * L_cm for d in diam_cm_list]  # cm²
 
-Rin_list = [1/soma(0.5).pas.g / A for A in A_list]  # Ω
+RN_list = [1/soma(0.5).pas.g / A for A in A_list]  # Ω
 I_amp = amp * 1e-9  # nA → A
 
 inv_diam_list = [1/d for d in diam_um_list]  # 1/µm
@@ -250,29 +250,29 @@ inv_diam_list = [1/d for d in diam_um_list]  # 1/µm
 # CREATE INDEPENDENT THEORETICAL CURVES (starting from 0)
 inv_diam_theory = np.linspace(0, max(inv_diam_list)*1.1, 20)  # 1/µm
 
-# Theory: Rin = Rm / (π × d × L)
+# Theory: RN = Rm / (π × d × L)
 # inv_diam is in (1/µm), but formula needs (1/cm)
-# So: Rin = Rm / (π × L) × (1/d_cm) = Rm / (π × L) × (1/d_µm) × (1e4)
+# So: RN = Rm / (π × L) × (1/d_cm) = Rm / (π × L) × (1/d_µm) × (1e4)
 Rm = 1 / soma(0.5).pas.g  # Ω·cm²
-m_Rin = Rm / (np.pi * L_cm) * 1e4  # Ω·µm (multiply by 1e4 to convert 1/cm to 1/µm)
-Rin_theory = m_Rin * inv_diam_theory  # Ω
+m_RN = Rm / (np.pi * L_cm) * 1e4  # Ω·µm (multiply by 1e4 to convert 1/cm to 1/µm)
+m_RN_theory = m_RN * inv_diam_theory  # Ω
 
-# Theory: ΔV = I × Rin (in mV)
-m_deltV = I_amp * m_Rin * 1000  # A × Ω·µm × (mV/V) = mV·µm
+# Theory: ΔV = I × RN (in mV)
+m_deltV = I_amp * m_RN * 1000  # A × Ω·µm × (mV/V) = mV·µm
 deltaV_theory = m_deltV * inv_diam_theory  # mV
 # After calculating the theory, add these prints:
 #print(f"\nDEBUG INFO:")
 #print(f"L_cm = {L_cm}")
 #print(f"Rm = {Rm}")
 #print(f"I_amp = {I_amp}")
-#print(f"m_Rin = {m_Rin}")
+#print(f"m_RN = {m_RN}")
 #print(f"m_deltV = {m_deltV}")
 #print(f"\ninv_diam_list = {inv_diam_list}")
 #print(f"delta_v_list = {delta_v_list}")
-#print(f"Rin_list = {Rin_list}")
+#print(f"RN_list = {RN_list}")
 #print(f"\ninv_diam_theory[:5] = {inv_diam_theory[:5]}")
 #print(f"deltaV_theory[:5] = {deltaV_theory[:5]}")
-#print(f"Rin_theory[:5] = {Rin_theory[:5]}")
+#print(f"m_RN_theory[:5] = {m_RN_theory[:5]}")
 
 # ---------------------------------------------------------------
 # Linear Regression — ΔV (NO FAKE ORIGIN)
@@ -313,35 +313,35 @@ ax_relation.text(
 )
 
 # ---------------------------------------------------------------
-# Linear Regression — Rin (NO FAKE ORIGIN)
+# Linear Regression — RN (NO FAKE ORIGIN)
 # ---------------------------------------------------------------
-y_rin = np.array(Rin_list)
-slope_rin, intercept_rin = np.polyfit(X, y_rin, 1)
-y_rin_fit = slope_rin * X_fit + intercept_rin
-# R² for Rin vs 1/D
-r_matrix = np.corrcoef(inv_diam_list, Rin_list)
-r_squared_Rin = r_matrix[0, 1]**2
+y_RN = np.array(RN_list)
+slope_RN, intercept_RN = np.polyfit(X, y_RN, 1)
+y_RN_fit = slope_RN * X_fit + intercept_RN
+# R² for RN vs 1/D
+r_matrix = np.corrcoef(inv_diam_list, RN_list)
+r_squared_RN = r_matrix[0, 1]**2
 
 # ---------------------------------------------------------------
-# Rin vs 1/D (Simulation points + Theory line)
+# RN vs 1/D (Simulation points + Theory line)
 # ---------------------------------------------------------------
-ax_RNDiamRelation.plot(inv_diam_theory, Rin_theory, "x", markersize=10,
-                       linewidth=2, color=(0.4,0.0,0.0), label=f"Theoretical={m_Rin:.2f} Ω·µm")
-ax_RNDiamRelation.plot(inv_diam_list, Rin_list, "o", 
+ax_RNDiamRelation.plot(inv_diam_theory, m_RN_theory, "x", markersize=10,
+                       linewidth=2, color=(0.4,0.0,0.0), label=f"Theoretical={m_RN:.2f} Ω·µm")
+ax_RNDiamRelation.plot(inv_diam_list, RN_list, "o", 
                        markersize=11, markeredgewidth=3, color=(0.2,0.8,0.8), 
-                       label="Simulated Rin", linestyle='None')
-# Regression line OVERLAID on Rin vs 1/D plot
-ax_RNDiamRelation.plot(X_fit, y_rin_fit, "r--", linewidth=3,
-                       label=f"Linear Fit: Rin = {slope_rin:.2e}x + {intercept_rin:.2e}")
+                       label="Simulated RN", linestyle='None')
+# Regression line OVERLAID on RN vs 1/D plot
+ax_RNDiamRelation.plot(X_fit, y_RN_fit, "r--", linewidth=3,
+                       label=f"Linear Fit: RN = {slope_RN:.2e}x + {intercept_RN:.2e}")
 
 ax_RNDiamRelation.set_title("Input Resistance vs 1/Diameter")
 ax_RNDiamRelation.set_xlabel("1 / Diameter (1/µm)")
-ax_RNDiamRelation.set_ylabel("Rin (Ω)")
+ax_RNDiamRelation.set_ylabel("RN (Ω)")
 ax_RNDiamRelation.grid(True)
 ax_RNDiamRelation.legend(fontsize=11)
 ax_RNDiamRelation.text(
     0.05, 0.95,
-    f"$R^2$ = {r_squared_Rin:.4f}",
+    f"$R^2$ = {r_squared_RN:.4f}",
     transform=ax_RNDiamRelation.transAxes,
     fontsize=11,
     verticalalignment="top"
@@ -391,8 +391,8 @@ I = amp * 1e-9                   # nA → A
 # For ΔV vs Rm: ΔV = I × (Rm/A) × 1000 = (I/A × 1000) × Rm
 m_deltaV_theory = (I / A) * 1000  # mV per (Ω·cm²)
 
-# For Rin vs Rm: Rin = Rm/A
-m_Rin_theory = 1 / A  # Ω per (Ω·cm²), which simplifies to 1/cm²
+# For RN vs Rm: RN = Rm/A
+m_RN_theory = 1 / A  # Ω per (Ω·cm²), which simplifies to 1/cm²
 
 print(f"\nGeometry:")
 print(f"  Diameter = {soma.diam:.2f} µm")
@@ -403,9 +403,9 @@ print(f"  Current injection = {amp:.3f} nA = {I:.3e} A")
 print(f"  Pulse duration = {iclamp.dur:.1f} ms")
 print(f"\nTheoretical Proportionality Constants:")
 print(f"  k_ΔV = I/A × 1000 = {m_deltaV_theory:.6e} mV/(Ω·cm²)")
-print(f"  m_Rin = 1/A = {m_Rin_theory:.6e} Ω/(Ω·cm²) = {m_Rin_theory:.6e} cm⁻²")
+print(f"  m_RN = 1/A = {m_RN_theory:.6e} Ω/(Ω·cm²) = {m_RN_theory:.6e} cm⁻²")
 print(f"\n  Expected: ΔV = {m_deltaV_theory:.6e} × Rm")
-print(f"  Expected: Rin = {m_Rin_theory:.6e} × Rm")
+print(f"  Expected: RN = {m_RN_theory:.6e} × Rm")
 print("="*60 + "\n")
 
 # Create figure
@@ -414,7 +414,7 @@ fig3, ax = plt.subplots(2, 2, figsize=(14, 10))
 ax_volt3 = ax[0, 0]           # Voltage traces
 ax_Rm = ax[1, 0]              # Rm bar graph
 ax_relation3 = ax[0, 1]       # ΔV vs Rm (sim + theory)
-ax_Rin = ax[1, 1]             # Rin vs Rm (sim + theory)
+ax_Rin = ax[1, 1]             # RN vs Rm (sim + theory)
 
 # Storage for simulation results
 delta_v_Rm = []
@@ -443,19 +443,19 @@ for Rm, color in zip(Rm_values, colors):
     v_max = max(v_list)
     delta_v = abs(v_max - v_rest)
     
-    # Compute Rin for this Rm
-    Rin = Rm / A
+    # Compute RN for this Rm
+    RN = Rm / A
     
     delta_v_Rm.append(delta_v)
-    Rin_values.append(Rin)
+    Rin_values.append(RN)
     Rm_values_list.append(Rm)
 
     # Theoretical predictions
     delta_v_theory = m_deltaV_theory * Rm
-    Rin_theory = m_Rin_theory * Rm
+    m_RN_theory = m_RN_theory * Rm
 
     print(f"  Rm = {Rm:6.0f} Ω·cm² → ΔV_sim = {delta_v:.4f} mV, ΔV_theory = {delta_v_theory:.4f} mV")
-    print(f"                    → Rin_sim = {Rin:.4e} Ω, Rin_theory = {Rin_theory:.4e} Ω")
+    print(f"                    → Rin_sim = {RN:.4e} Ω, m_RN_theory = {m_RN_theory:.4e} Ω")
 
 # Voltage plot
 ax_volt3.set_xlim(0, 25)
@@ -476,7 +476,7 @@ ax_Rm.grid(True, axis='y')
 # INDEPENDENT THEORETICAL CURVES (starting from 0)
 Rm_theory = np.linspace(0, max(Rm_values) * 1.1, 20)
 delta_v_theory_curve = m_deltaV_theory * Rm_theory
-Rin_theory_curve = m_Rin_theory * Rm_theory
+m_RN_theory_curve = m_RN_theory * Rm_theory
 
 # Linear Regression — ΔV vs Rm (independent from theory)
 X = np.array(Rm_values_list)
@@ -510,27 +510,27 @@ ax_relation3.text(
     verticalalignment="top"
 )
 
-# Linear Regression — Rin vs Rm (independent from theory)
-y_rin = np.array(Rin_values)
-slope_Rin, intercept_Rin = np.polyfit(X, y_rin, 1)
-y_Rin_fit = slope_Rin * X_fit + intercept_Rin
-r2_Rin = np.corrcoef(X, y_rin)[0, 1]**2
+# Linear Regression — RN vs Rm (independent from theory)
+y_RN = np.array(Rin_values)
+slope_RN, intercept_RN = np.polyfit(X, y_RN, 1)
+y_RN_fit = slope_RN * X_fit + intercept_RN
+r2_Rin = np.corrcoef(X, y_RN)[0, 1]**2
 
-# Rin vs Rm plot
-ax_Rin.plot(Rm_theory, Rin_theory_curve, 'x', color='red',
-            linewidth=3, alpha=0.8, label=f"Theoretical m={m_Rin_theory:.2e} 1/cm²")
+# RN vs Rm plot
+ax_Rin.plot(Rm_theory, m_RN_theory_curve, 'x', color='red',
+            linewidth=3, alpha=0.8, label=f"Theoretical m={m_RN_theory:.2e} 1/cm²")
 ax_Rin.plot(Rm_values_list, Rin_values, 'o', color='purple',
             markersize=10, label='Simulated', linestyle='None')
-ax_Rin.plot(X_fit, y_Rin_fit, '--', color='black', linewidth=2,
-             label=f"Linear Fit: y={slope_Rin:.6e}x + {intercept_Rin:.2e}")
+ax_Rin.plot(X_fit, y_RN_fit, '--', color='black', linewidth=2,
+             label=f"Linear Fit: y={slope_RN:.6e}x + {intercept_RN:.2e}")
 
 ax_Rin.set_xlabel("Specific Membrane Resistance Rm (Ω·cm²)")
-ax_Rin.set_ylabel("Input Resistance Rin (Ω)")
+ax_Rin.set_ylabel("Input Resistance RN (Ω)")
 ax_Rin.set_title("Input Resistance vs Membrane Resistivity")
 ax_Rin.grid(True)
 ax_Rin.legend(fontsize=11)
 ax_Rin.set_xlim(0, max(Rm_values) * 1.1)
-ax_Rin.set_ylim(0, max(max(Rin_values), max(Rin_theory_curve)) * 1.1)
+ax_Rin.set_ylim(0, max(max(Rin_values), max(m_RN_theory_curve)) * 1.1)
 
 ax_Rin.text(
     0.05, 0.95,
@@ -548,11 +548,11 @@ print(f"  Theoretical slope (k_theory) = {m_deltaV_theory:.6e} mV/(Ω·cm²)")
 print(f"  Intercept = {intercept_deltaV:.6e} mV")
 print(f"  Difference = {abs(m_deltaV_theory - slope_deltaV):.6e} ({abs(m_deltaV_theory - slope_deltaV)/m_deltaV_theory*100:.2f}%)")
 
-print(f"\nLinear Regression Results (Rin vs Rm):")
-print(f"  Simulated slope (k_sim) = {slope_Rin:.6e} Ω/(Ω·cm²)")
-print(f"  Theoretical slope (k_theory) = {m_Rin_theory:.6e} Ω/(Ω·cm²)")
-print(f"  Intercept = {intercept_Rin:.6e} Ω")
-print(f"  Difference = {abs(m_Rin_theory - slope_Rin):.6e} ({abs(m_Rin_theory - slope_Rin)/m_Rin_theory*100:.2f}%)")
+print(f"\nLinear Regression Results (RN vs Rm):")
+print(f"  Simulated slope (k_sim) = {slope_RN:.6e} Ω/(Ω·cm²)")
+print(f"  Theoretical slope (k_theory) = {m_RN_theory:.6e} Ω/(Ω·cm²)")
+print(f"  Intercept = {intercept_RN:.6e} Ω")
+print(f"  Difference = {abs(m_RN_theory - slope_RN):.6e} ({abs(m_RN_theory - slope_RN)/m_RN_theory*100:.2f}%)")
 
 plt.tight_layout()
 plt.show(block=False)
