@@ -585,7 +585,7 @@ I   = amp * 1e-9                          # A
 
 # Theoretical predictions (independent of simulation)
 deltaV_theory    = I * (Rm / A) * 1000    # mV – should be ~constant
-tau_theory_slope = Rm * 0.001             # ms per (µF/cm²) → 0.500 ms/(µF/cm²)
+tau_theorySlope = Rm * 0.001              # ms 
 
 print(f"\nGeometry & parameters:")
 print(f"  Diameter   = {soma.diam/um:.1f} µm")
@@ -594,7 +594,7 @@ print(f"  Area A     = {A:.2e} cm²")
 print(f"  Rm         = {Rm:.0f} Ω·cm²")
 print(f"  I          = {amp:.3f} nA  →  {I:.2e} A")
 print(f"  Expected steady-state ΔV ≈ {deltaV_theory:.2f} mV (independent of Cm)")
-print(f"  Theoretical τ = Rm × Cm × 0.001 → slope = {tau_theory_slope:.3f} ms/(µF/cm²)")
+print(f"  Theoretical τ = Rm × Cm × 0.001 → slope = {tau_theorySlope:.3f} ms/(µF/cm²)")
 print("="*60 + "\n")
 
 # Exponential charging function: V(t) = V0 + ΔV × (1 − exp(−t/τ))
@@ -615,12 +615,17 @@ ax_tau     = ax[1, 1]     # τ vs Cm (should be linear)
 # Storage for results
 peak_dV_sim = []          # will store simulated measured ΔV
 tau_fitted  = []
+tau_theoretical = []
 
 # ────────────────────────────────────────────────
 # Main simulation loop – one run per Cm value
 # ────────────────────────────────────────────────
 for Cm, color in zip(Cm_values, colors):
     soma.cm = Cm                          # set specific capacitance
+    
+    # Calculate theoretical tau for THIS specific Cm value
+    tau_theory = Rm * Cm * 0.001  # (Ω·cm²) × (µF/cm²) × (ms/µs) = ms
+    tau_theoretical.append(tau_theory)
 
     # Record voltage and time
     v = n.Vector().record(soma(0.5)._ref_v)
@@ -633,8 +638,8 @@ for Cm, color in zip(Cm_values, colors):
     v_arr = np.array(v)
 
     # Measured peak (simulated raw max value)
-    V_rest_sim = v_arr[0] # This line gets the resting potential from the start of the trace in the form of an array.
-    dV_measured = v_arr.max() - V_rest_sim # this operation gives peak ΔV by subtracting resting potential
+    V_rest_global = v_arr[0] # This line gets the resting potential from the start of the trace in the form of an array.
+    dV_measured = v_arr.max() - V_rest_global # this operation gives peak ΔV by subtracting resting potential
     peak_dV_sim.append(dV_measured) # here append means to add the measured peak ΔV to the list for later plotting
 
     # Fit exponential only to the rising phase (during current pulse)
@@ -642,11 +647,19 @@ for Cm, color in zip(Cm_values, colors):
     if np.sum(mask_pulse) > 20:           # need enough points for reliable fit
         t_fit = t_arr[mask_pulse]         # extrancects time from simulation
         v_fit = v_arr[mask_pulse]         # extracts voltage from simulation
+
+        V_rest_sim = v_fit[0]         # Baseline at start of pulse
+
         t_fit -= t_fit[0]                 # shift to start at t=0
         v_fit -= V_rest_sim               # shift to start at 0 mV deflection
 
+        # DEBUG: Check the shifted data
+        print(f"  DEBUG: First 5 points of t_fit: {t_fit[:5]}")
+        print(f"  DEBUG: First 5 points of v_fit: {v_fit[:5]}")
+        print(f"  DEBUG: V_rest_sim = {V_rest_sim:.2f} mV")
+
         # Initial guess: reasonable values based on theory
-        p0 = [0, dV_measured * 0.95, Rm * Cm * 0.001 * 1.1] # the 0.95 and 1.1 are just to help the fitting process
+        p0 = [0, dV_measured * 0.95, tau_theory * 1.1] # the 0.95 and 1.1 are just to help the fitting process
         # the 0.001 factor converts from µF/cm² and Ω·cm² to ms because before the conversion the units are in microseconds
         try: # the try-except block is used to catch any errors during the fitting process
             popt, _ = curve_fit(charging_func, t_fit, v_fit, # popt stands for optimal parameters
@@ -669,7 +682,7 @@ for Cm, color in zip(Cm_values, colors):
             print(f"  Fit failed for Cm = {Cm}: {e}")
             tau_fitted.append(np.nan)
     else:
-        tau_fitted.append(np.nan)
+        tau_fitted.append(np.nan) # nan stands for not a number, used when fit fails
 
     # Plot full simulated trace
     ax_volt.plot(t_arr, v_arr, color=color, lw=2.2,
@@ -680,7 +693,7 @@ for Cm, color in zip(Cm_values, colors):
 # ────────────────────────────────────────────────
 try:
     popt_dV, _ = curve_fit(deltaV_vs_Cm_func, Cm_values, peak_dV_sim,
-                            p0=[deltaV_theory, iclamp.dur / tau_theory_slope])
+                            p0=[deltaV_theory, iclamp.dur / tau_theorySlope])
     a_fit, b_fit = popt_dV
     Cm_smooth = np.linspace(min(Cm_values)*0.8, max(Cm_values)*1.2, 100)
     dV_smooth = deltaV_vs_Cm_func(Cm_smooth, a_fit, b_fit)
@@ -725,8 +738,8 @@ ax_Cm_bar.grid(True, axis='y')
 # D. Time constant τ vs Cm – should be linear
 ax_tau.plot(Cm_values, tau_fitted, 'mo-', markersize=9, lw=1.5,
             label="Fitted τ from voltage rise")
-ax_tau.plot(Cm_values, tau_theory_slope * np.array(Cm_values), 'r--', lw=2.5,
-            label=f"Theory: τ = {tau_theory_slope:.3f} × Cm  ms")
+ax_tau.plot(Cm_values, tau_theorySlope * np.array(Cm_values), 'r--', lw=2.5,
+            label=f"Theory: τ = {tau_theorySlope:.3f}x + 0 ms")
 ax_tau.set_title("Time Constant vs Membrane Capacitance\n(τ = Rm × Cm × 0.001)")
 ax_tau.set_xlabel("Specific capacitance Cm (µF/cm²)")
 ax_tau.set_ylabel("Time constant τ (ms)")
