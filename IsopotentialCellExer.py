@@ -30,6 +30,9 @@ iclamp.amp = 0.9 #nA
 #----------------------------------------------------------------------------------------
 #                                 1. verying Current Pulses
 #----------------------------------------------------------------------------------------
+print('\n'+ '='*60)
+print('SECTION 1: VARYING CURRENT PULSES')
+print('='*60)
 
 #print('\n1. Varying Current Pulses\n')
 soma.insert('pas') # insert passive properties
@@ -178,6 +181,9 @@ print(soma.L)
 #----------------------------------------------------------------------------------------
 # Section 2: Varying Diameters + Linear Regression (Transposed Layout)
 #----------------------------------------------------------------------------------------
+print('\n'+ '='*60)
+print('SECTION 2: VARYING DIAMETER')
+print('='*60)
 
 # Simulation settings
 diameters = [(1 * um) * k for k in range(1, 5)]   # 1–4 µm
@@ -420,9 +426,9 @@ print("="*60 + "\n")
 def charging_func(t, V0, deltaV, tau):
     return V0 + deltaV * (1 - np.exp(-t / tau))
 
-# Exponential form for ΔV vs Rm: ΔV = a * (1 - exp(-b / Rm))  (due to finite pulse duration)
-def deltaV_vs_Rm_func(Rm, a, b):
-    return a * (1 - np.exp(-b / Rm))
+# Linear function for τ vs Rm: τ = m * Rm + b
+def tau_linear(Rm, m, b):
+    return m*Rm + b
 
 # Create figure
 fig3, ax = plt.subplots(3, 2, figsize=(18, 10))
@@ -487,7 +493,9 @@ for Rm, color in zip(Rm_values, colors):
         try: # the try-except block is used to catch any errors during the fitting process
             popt, _ = curve_fit(charging_func, t_fit, v_fit, # popt stands for optimal parameters
                                 p0=p0,
-                                bounds=([-np.inf, 0, 0], [np.inf, np.inf, 1000]))
+                                bounds=([-np.inf, 0, 0], [np.inf, np.inf, 1000])) #the first bound is for V0, the second for ΔV (which must be positive), and the third for τ (which must be positive and less than 1000 ms)
+            # time gets escluded from the bounds because we are not fitting for time, but rather using it as the independent variable
+            # curve_fit knows that time is an independendt variable by the way we call the charging_func, where time is the first argument and the parameters to fit are the subsequent arguments.
             V0_fit, dV_fit, tau_fit = popt
 
             tau_fitted.append(tau_fit) 
@@ -510,19 +518,9 @@ for Rm, color in zip(Rm_values, colors):
     # ────────────────────────────────────────────────
     # Fit exponential regression to ΔV vs Cm (captures slight dependence due to finite pulse)
     # ────────────────────────────────────────────────
-    try:
-        popt_dV, _ = curve_fit(deltaV_vs_Rm_func, Rm_values, peak_dV_sim,
-                                p0=[deltaV_theory, iclamp.dur / tau_theorySlope])
-        a_fit, b_fit = popt_dV
-        Cm_smooth = np.linspace(min(Rm_values)*0.8, max(Rm_values)*1.2, 100)
-        dV_smooth = deltaV_vs_Rm_func(Cm_smooth, a_fit, b_fit)
-    except Exception as e:
-        print(f"ΔV vs Cm fit failed: {e}")
-        Cm_smooth = []
-        dV_smooth = []
 
     # Plot full simulated trace
-    ax_volt.plot(t_arr, v_arr, color=color, lw=2.2,
+    ax_volt3.plot(t_arr, v_arr, color=color, lw=2.2,
                  label=f"Rm = {Rm:.1f} Ω·cm²")
     # Plot voltage trace
     ax_volt3.plot(t_arr, v_arr, color=color, linewidth=2,
@@ -545,6 +543,19 @@ for Rm, color in zip(Rm_values, colors):
 
     print(f"  Rm = {Rm:6.0f} Ω·cm² → ΔV_sim = {delta_v:.4f} mV, ΔV_theory = {delta_v_theory:.4f} mV")
     print(f"                    → Rin_sim = {RN:.4e} Ω, m_RN_theory = {m_RN_theory:.4e} Ω")
+
+# tau vs Rm linear fit (independent from theory)
+tau_fitted = np.array(tau_fitted)
+
+popt_tau, pcov_tau = curve_fit(
+    tau_linear,
+    Rm_values,
+    tau_fitted
+)
+
+m_tau, b_tau = popt_tau
+m_tau_err = np.sqrt(pcov_tau[0,0])
+
 
 # Voltage plot
 ax_volt3.set_xlim(0, 25)
@@ -580,7 +591,7 @@ r2_dV = np.corrcoef(X, y)[0, 1]**2
 ax_relation3.plot(Rm_theory, delta_v_theory_curve, 'x', color='red',
                   linewidth=3, alpha=0.8, label=f'Theoretical m={deltaV_theory4R:.2e} A/cm²')
 ax_relation3.plot(Rm_values_list, delta_v_Rm, 'o', color='blue',
-                  markersize=10, label='Simulated', linestyle='None')
+                  markersize=10, label='Simulated Values', linestyle='None')
 ax_relation3.plot(X_fit, y_deltaV_fit, '--', color='black', linewidth=2, 
                   label=f"linear Fit: y={slope_deltaV:.2f}x + {intercept_deltaV:.2e}")
 ax_relation3.set_xlabel("Membrane Resistance Rm (Ω·cm²)")
@@ -605,11 +616,12 @@ slope_RN, intercept_RN = np.polyfit(X, y_RN, 1)
 y_RN_fit = slope_RN * X_fit + intercept_RN
 r2_Rin = np.corrcoef(X, y_RN)[0, 1]**2
 
+
 # RN vs Rm plot
 ax_Rin.plot(Rm_theory, m_RN_theory_curve, 'x', color='red',
             linewidth=3, alpha=0.8, label=f"Theoretical m={m_RN_theory:.2e} 1/cm²")
 ax_Rin.plot(Rm_values_list, Rin_values, 'o', color='purple',
-            markersize=10, label='Simulated', linestyle='None')
+            markersize=10, label='Simulated Values', linestyle='None')
 ax_Rin.plot(X_fit, y_RN_fit, '--', color='black', linewidth=2,
              label=f"Linear Fit: y={slope_RN:.6e}x + {intercept_RN:.2e}")
 
@@ -632,19 +644,29 @@ ax_Rin.text(
 #--------------------------------------------------------------------------
 # Time constant τ vs Rm plot
 #--------------------------------------------------------------------------
-ax_tau4R.plot(Rm_values, tau_fitted, 'mo', markersize=9, lw=1.5, 
-              label='Fitted τ from volatage rise')
+Rm_fit = np.linspace(0, max(Rm_values)*1.1, 200)
+tau_fit = tau_linear(Rm_fit, m_tau, b_tau)
+
+ax_tau4R.plot(Rm_fit, tau_fit, 'k--',
+              label=f"Fit: τ = {m_tau:.4f}Rm + {b_tau:.2f}")
+
+ax_tau4R.plot(Rm_values,tau_theorySlope * np.array(Rm_values), 'o', color='green', 
+              label= 'Simulated Values', markersize=10)
+
 ax_tau4R.plot(Rm_values, tau_theorySlope * np.array(Rm_values), 'r-', lw=2.5,
             label=f"Theory: τ = {tau_theorySlope:.3f}x + 0 ms")
+
 ax_tau4R.set_title("Time Constant vs Specific Membrane Resistance\n(τ = Rm × Cm × 0.001)")
 ax_tau4R.set_xlabel("Specific Mebrane Resistance Rm (Ω·cm²)")
 ax_tau4R.set_ylabel("Time constant τ (ms)")
 ax_tau4R.grid(True)
 ax_tau4R.legend(fontsize=10)
+print(f"\n fitting error: {(m_tau-tau_theorySlope)/tau_theorySlope:.4f} ms")
 
 # Print regression results
 print(f"\nLinear Regression Results (ΔV vs Rm):")
 print(f"  Simulated slope (k_sim) = {slope_deltaV:.6e} mV/(Ω·cm²)")
+print(f"")
 print(f"  Theoretical slope (k_theory) = {deltaV_theory4R:.6e} mV/(Ω·cm²)")
 print(f"  Intercept = {intercept_deltaV:.6e} mV")
 print(f"  Difference = {abs(deltaV_theory4R - slope_deltaV):.6e} ({abs(deltaV_theory4R - slope_deltaV)/deltaV_theory4R*100:.2f}%)")
@@ -705,6 +727,10 @@ def charging_func(t, V0, deltaV, tau):
 # Exponential form for ΔV vs Cm: ΔV = a * (1 - exp(-b / Cm))  (due to finite pulse duration)
 def deltaV_vs_Cm_func(Cm, a, b):
     return a * (1 - np.exp(-b / Cm))
+
+# Linear function for τ vs Cm: τ = m * Cm + b
+def tau_linear2(Cm, m, b):
+    return m*Cm + b
 
 # Layout: 2×2 figure
 fig4, ax = plt.subplots(2, 2, figsize=(15, 10))
@@ -791,6 +817,18 @@ for Cm, color in zip(Cm_values, colors):
     ax_volt.plot(t_arr, v_arr, color=color, lw=2.2,
                  label=f"Cm = {Cm:.1f} µF/cm²")
 
+# tau vs Rm linear fit (independent from theory)
+tau_fitted = np.array(tau_fitted)
+
+popt_tau2, pcov_tau = curve_fit(
+    tau_linear2,
+    Cm_values,
+    tau_fitted
+)
+
+m_tau2, b_tau2 = popt_tau2
+m_tau_err2 = np.sqrt(pcov_tau[0,0])
+
 # ────────────────────────────────────────────────
 # Fit exponential regression to ΔV vs Cm (captures slight dependence due to finite pulse)
 # ────────────────────────────────────────────────
@@ -824,6 +862,7 @@ ax_dV.axhline(deltaV_theory, color='red', ls='--', lw=2.2,
               label=f"Theory: ΔV = {deltaV_theory:.1f} mV (independent of Cm)")
 ax_dV.plot(Cm_smooth, dV_smooth, 'g--', lw=2.0,
            label=f"Exponential fit: ΔV = {a_fit:.1f} (1 - exp(-{b_fit:.2f}/Cm))")
+print(f" Fitting error for ΔV vs Cm: {(a_fit - deltaV_theory)/deltaV_theory*100:.2f}%")
 ax_dV.set_title("Steady-State Voltage Deflection vs Cm")
 ax_dV.set_xlabel("Specific capacitance Cm (µF/cm²)")
 ax_dV.set_ylabel("ΔV (mV)")
@@ -840,9 +879,12 @@ ax_Cm_bar.grid(True, axis='y')
 
 # D. Time constant τ vs Cm – should be linear
 ax_tau.plot(Cm_values, tau_fitted, 'mo', markersize=9, lw=1.5,
-            label="Fitted τ from voltage rise")
+            label=f"Fit: τ = {m_tau2:.4f}Cm + {b_tau2:.2f}")
 ax_tau.plot(Cm_values, tau_theorySlope * np.array(Cm_values), 'r--', lw=2.5,
             label=f"Theory: τ = {tau_theorySlope:.3f}x + 0 ms")
+ax_tau4R.plot(Rm_values, tau_theorySlope * np.array(Cm_values), 'r-', lw=2.5,
+            label=f"Theory: τ = {tau_theorySlope:.3f}x + 0 ms")
+print(f"\n fitting error: {(m_tau2-tau_theorySlope)/tau_theorySlope:.4f} %")
 ax_tau.set_title("Time Constant vs Membrane Capacitance\n(τ = Rm × Cm × 0.001)")
 ax_tau.set_xlabel("Specific capacitance Cm (µF/cm²)")
 ax_tau.set_ylabel("Time constant τ (ms)")
