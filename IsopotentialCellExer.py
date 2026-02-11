@@ -403,8 +403,9 @@ soma.cm = 1.0                    # µF/cm²
 
 # THEORETICAL PROPORTIONALITY CONSTANTS (independent of simulation)
 # For ΔV vs Rm: ΔV = I × (Rm/A) × 1000 = (I/A × 1000) × Rm
-deltaV_theory4R = (I / A) * 1e3  # 
+deltaV_theory4RSlope = (I / A) * 1e3  # 
 tau_theorySlope = (soma.cm) * 0.001    # ms 
+print(f'\n Tau theory slope (τ/Rm): {tau_theorySlope:.6e} (Ω·cm²)')
 # For RN vs Rm: RN = Rm/A
 m_RN_theory = 1 / A  # Ω per (Ω·cm²), which simplifies to 1/cm²
 print(f"\n Rn slope: {m_RN_theory:.6e}")
@@ -417,9 +418,9 @@ print(f"\nStimulation:")
 print(f"  Current injection = {amp:.3f} nA = {I:.3e} A")
 print(f"  Pulse duration = {iclamp.dur:.1f} ms")
 print(f"\nTheoretical Proportionality Constants:")
-print(f"  k_ΔV = I/A × 1000 = {deltaV_theory4R:.6e} mV/(Ω·cm²)")
+print(f"  k_ΔV = I/A × 1000 = {deltaV_theory4RSlope:.6e} mV/(Ω·cm²)")
 print(f"  m_RN = 1/A = {m_RN_theory:.6e} Ω/(Ω·cm²) = {m_RN_theory:.6e} cm⁻²")
-print(f"\n  Expected: ΔV = {deltaV_theory4R:.6e} × Rm")
+print(f"\n  Expected: ΔV = {deltaV_theory4RSlope:.6e} × Rm")
 print(f"  Expected: RN = {m_RN_theory:.6e} × Rm")
 print("="*60 + "\n")
 # Exponential charging function: V(t) = V0 + ΔV × (1 − exp(−t/τ))
@@ -449,6 +450,8 @@ tau_fitted = []
 # Run simulations
 print("Simulation Results:")
 for Rm, color in zip(Rm_values, colors):
+    print("Plotting Rm =", Rm)
+
     soma(0.5).pas.g = 1.0 / Rm
 
     # Calculate theoretical tau for THIS specific Cm value
@@ -497,9 +500,10 @@ for Rm, color in zip(Rm_values, colors):
             # time gets escluded from the bounds because we are not fitting for time, but rather using it as the independent variable
             # curve_fit knows that time is an independendt variable by the way we call the charging_func, where time is the first argument and the parameters to fit are the subsequent arguments.
             V0_fit, dV_fit, tau_fit = popt
-
+            
             tau_fitted.append(tau_fit) 
-
+            print("tau_fitted =", tau_fitted)
+            
             # Plot smooth fitted curve
             t_smooth = np.linspace(0, iclamp.dur, 20)
             v_smooth = charging_func(t_smooth, V0_fit, dV_fit, tau_fit) + V_rest_sim
@@ -519,9 +523,7 @@ for Rm, color in zip(Rm_values, colors):
     # Fit exponential regression to ΔV vs Cm (captures slight dependence due to finite pulse)
     # ────────────────────────────────────────────────
 
-    # Plot full simulated trace
-    ax_volt3.plot(t_arr, v_arr, color=color, lw=2.2,
-                 label=f"Rm = {Rm:.1f} Ω·cm²")
+
     # Plot voltage trace
     ax_volt3.plot(t_arr, v_arr, color=color, linewidth=2,
                   label=f"Rm = {Rm/1000:.1f} kΩ·cm²")
@@ -538,11 +540,13 @@ for Rm, color in zip(Rm_values, colors):
     Rm_values_list.append(Rm)
 
     # Theoretical predictions
-    delta_v_theory = deltaV_theory4R
+    deltaV_theory4R = deltaV_theory4RSlope * Rm  # mV
     m_RN_theory = m_RN_theory 
 
-    print(f"  Rm = {Rm:6.0f} Ω·cm² → ΔV_sim = {delta_v:.4f} mV, ΔV_theory = {delta_v_theory:.4f} mV")
+    print(f"  Rm = {Rm:6.0f} Ω·cm² → ΔV_sim = {delta_v:.4f} mV, ΔV_theory = {deltaV_theory4R:.4f} mV")
     print(f"                    → Rin_sim = {RN:.4e} Ω, m_RN_theory = {m_RN_theory:.4e} Ω")
+
+
 
 # tau vs Rm linear fit (independent from theory)
 tau_fitted = np.array(tau_fitted)
@@ -575,7 +579,7 @@ ax_Rm.grid(True, axis='y')
 
 # INDEPENDENT THEORETICAL CURVES (starting from 0)
 Rm_theory = np.linspace(0, max(Rm_values) * 1.1, 20)
-delta_v_theory_curve = deltaV_theory4R * Rm_theory
+deltaV_theory4R_curve = deltaV_theory4RSlope * Rm_theory
 m_RN_theory_curve = m_RN_theory * Rm_theory
 
 # Linear Regression — ΔV vs Rm (independent from theory)
@@ -588,8 +592,8 @@ y_deltaV_fit = slope_deltaV * X_fit + intercept_deltaV
 r2_dV = np.corrcoef(X, y)[0, 1]**2
 
 # ΔV vs Rm plot
-ax_relation3.plot(Rm_theory, delta_v_theory_curve, 'x', color='red',
-                  linewidth=3, alpha=0.8, label=f'Theoretical m={deltaV_theory4R:.2e} A/cm²')
+ax_relation3.plot(Rm_theory, deltaV_theory4R_curve, 'x', color='red',
+                  linewidth=3, alpha=0.8, label=f'Theoretical m={deltaV_theory4RSlope:.2e} A/cm²')
 ax_relation3.plot(Rm_values_list, delta_v_Rm, 'o', color='blue',
                   markersize=10, label='Simulated Values', linestyle='None')
 ax_relation3.plot(X_fit, y_deltaV_fit, '--', color='black', linewidth=2, 
@@ -600,7 +604,7 @@ ax_relation3.set_title("Peak Voltage vs Specific Membrane Resistance")
 ax_relation3.grid(True)
 ax_relation3.legend(fontsize=11)
 ax_relation3.set_xlim(0, max(Rm_values) * 1.1)
-ax_relation3.set_ylim(0, max(max(delta_v_Rm), max(delta_v_theory_curve)) * 1.1)
+ax_relation3.set_ylim(0, max(max(delta_v_Rm), max(deltaV_theory4R_curve)) * 1.1)
 
 ax_relation3.text(
     0.05, 0.95,
@@ -650,12 +654,12 @@ tau_fit = tau_linear(Rm_fit, m_tau, b_tau)
 ax_tau4R.plot(Rm_fit, tau_fit, 'k--',
               label=f"Fit: τ = {m_tau:.4f}Rm + {b_tau:.2f}")
 
-ax_tau4R.plot(Rm_values,tau_theorySlope * np.array(Rm_values), 'o', color='green', 
+ax_tau4R.plot(Rm_values, tau_fitted, 'o', color='green', 
               label= 'Simulated Values', markersize=10)
 
 ax_tau4R.plot(Rm_values, tau_theorySlope * np.array(Rm_values), 'r-', lw=2.5,
             label=f"Theory: τ = {tau_theorySlope:.3f}x + 0 ms")
-
+print
 ax_tau4R.set_title("Time Constant vs Specific Membrane Resistance\n(τ = Rm × Cm × 0.001)")
 ax_tau4R.set_xlabel("Specific Mebrane Resistance Rm (Ω·cm²)")
 ax_tau4R.set_ylabel("Time constant τ (ms)")
@@ -667,9 +671,9 @@ print(f"\n fitting error: {(m_tau-tau_theorySlope)/tau_theorySlope:.4f} ms")
 print(f"\nLinear Regression Results (ΔV vs Rm):")
 print(f"  Simulated slope (k_sim) = {slope_deltaV:.6e} mV/(Ω·cm²)")
 print(f"")
-print(f"  Theoretical slope (k_theory) = {deltaV_theory4R:.6e} mV/(Ω·cm²)")
+print(f"  Theoretical slope (k_theory) = {deltaV_theory4RSlope:.6e} mV/(Ω·cm²)")
 print(f"  Intercept = {intercept_deltaV:.6e} mV")
-print(f"  Difference = {abs(deltaV_theory4R - slope_deltaV):.6e} ({abs(deltaV_theory4R - slope_deltaV)/deltaV_theory4R*100:.2f}%)")
+print(f"  Difference = {abs(deltaV_theory4RSlope - slope_deltaV):.6e} ({abs(deltaV_theory4RSlope - slope_deltaV)/deltaV_theory4RSlope*100:.2f}%)")
 
 print(f"\nLinear Regression Results (RN vs Rm):")
 print(f"  Simulated slope (k_sim) = {slope_RN:.6e} Ω/(Ω·cm²)")
@@ -725,6 +729,10 @@ def charging_func(t, V0, deltaV, tau):
     return V0 + deltaV * (1 - np.exp(-t / tau))
 
 # Exponential form for ΔV vs Cm: ΔV = a * (1 - exp(-b / Cm))  (due to finite pulse duration)
+# This fucntion's purpose is to capture the slight dependence of ΔV on Cm that arises because the current pulse is not 
+# infinitely long, so the voltage doesn't fully reach its steady-state value. The parameters a and b will be 
+# fitted to the data, where a, a = dV represents  the asymptotic maximum ΔV as Cm → ∞, and b, 
+# b = T/Rm, where T = t at the end of the pulse, controls how quickly ΔV approaches that maximum as Cm increases.
 def deltaV_vs_Cm_func(Cm, a, b):
     return a * (1 - np.exp(-b / Cm))
 
