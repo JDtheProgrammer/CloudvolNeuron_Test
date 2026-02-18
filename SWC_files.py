@@ -11,7 +11,12 @@ import vtk
 from mpl_toolkits.mplot3d import Axes3D
 import neuron 
 from neuron import n
+from neuron import h, gui
 from neuron.units import ms, mV, um
+import os # os stands for operating system, and it's a built-in Python module that provides a way to interact with 
+# the underlying operating system. It allows you to perform various tasks such as file and directory manipulation, 
+# environment variable access, and more. In this code, we will use the os module to check if the specified SWC file 
+# exists before attempting to load it.
 
 print(f'VTK version: {vtk.VTK_VERSION}')
 
@@ -23,11 +28,31 @@ except ImportError:
     # You can also add code here to exit the script or attempt installation
     # import sys
     # sys.exit(1) 
+    
+h.load_file('import3d.hoc')
 
+swc_path = 'SWC_files/your_file.swc'  # adjust!
+print("File exists?", os.path.exists(swc_path))
+
+cell = h.Import3d_SWC_read()
+cell.quiet = 0  # show warnings
+cell.input(swc_path)
+
+print("Parsed sections:", cell.sections.count())
+print("Total points:", cell.total_points)
+
+# If count > 0, proceed
+i3d = h.Import3d_GUI(cell, 0)
+i3d.instantiate(None)
+
+print("After instantiate - sections in model:", len(list(h.allsec())))
+for sec in h.allsec():
+    print(h.secname(sec=sec))
+h.topology()
 #=======================================================================================================================================================================
 #                Example 1: from: https://rutgersconnect-my.sharepoint.com/:w:/g/personal/jdd235_scarletmail_rutgers_edu/IQAh7VvfGQa8RbSowlGy6GQrAU_HWpM2j6IpUcMOXtNC3mE
 #=======================================================================================================================================================================
-vol = CloudVolume('precomputed://gs://neuroglancer/zfish_v1/image', use_https=True)
+'''vol = CloudVolume('precomputed://gs://neuroglancer/zfish_v1/image', use_https=True)
 img = vol[51267:51367, 24985:25085, 17072:17172]
 
 # Check what you got
@@ -39,7 +64,7 @@ print(f"Value range: {img.min()} to {img.max()}")
 import matplotlib.pyplot as plt
 plt.imshow(img[:, :, 50], cmap='gray')  # Middle Z slice
 plt.title('Zebrafish brain slice')
-plt.show()
+plt.show()'''
 
 #=======================================================================================================================================================================
 #                Example 2: from: https://rutgersconnect-my.sharepoint.com/:w:/g/personal/jdd235_scarletmail_rutgers_edu/IQAh7VvfGQa8RbSowlGy6GQrAU_HWpM2j6IpUcMOXtNC3mE
@@ -149,20 +174,27 @@ if __name__ == '__main__':
     
     return np.array(data)
 
-def visualize_swc(swc_data, output_file='neuron_visualization.png'):
+swc_file1 = "/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/76182_reRoot_reSample_5000.swc"
+skeleton_id = os.path.basename(swc_file1).split('_')[0] # Extract skeleton ID from filename
+
+def visualize_swc(swc_data, skeleton_id, output_file='neuron_visualization.png'):
     """
     Visualize a neuron from SWC data.
     """
     fig = plt.figure(figsize=(8, 15))
-    
+    fig.canvas.manager.set_window_title('Figure 1: skeleton ID:' + skeleton_id)
+
     # Extract coordinates
     ids = swc_data[:, 0].astype(int)
     types = swc_data[:, 1].astype(int)
-    x = swc_data[:, 2]
+    x = swc_data[:, 2] # the : operator is used to select all rows of the specified column 
+    # in this case, column index 2 which corresponds to the X coordinate. (indeces in python start at 0)
     y = swc_data[:, 3]
     z = swc_data[:, 4]
     radius = swc_data[:, 5]
-    parent_ids = swc_data[:, 6].astype(int)
+    parent_ids = swc_data[:, 6].astype(int) # astype() is a method of numpy arrays, not lists. If parent_ids is a numpy array,
+    # you can use astype() to convert its data type. However, if parent_ids is a list, you would need to convert it to a numpy
+    # array first before using astype(). Here's how you can do it:
     
     # Color map for different neurite types
     type_colors = {
@@ -179,7 +211,9 @@ def visualize_swc(swc_data, output_file='neuron_visualization.png'):
     for i, (node_id, parent_id, node_type) in enumerate(zip(ids, parent_ids, types)):
         if parent_id != -1:  # Not root
             # Find parent index
+            print("\n Processing node ID:", node_id, "with parent ID:", parent_id)
             parent_idx = np.where(ids == parent_id)[0]
+            print('\n Parent index found at:', parent_idx)
             if len(parent_idx) > 0:
                 parent_idx = parent_idx[0]
                 color = type_colors.get(node_type, 'gray')
@@ -191,7 +225,7 @@ def visualize_swc(swc_data, output_file='neuron_visualization.png'):
     ax1.set_xlabel('X')
     ax1.set_ylabel('Y')
     ax1.set_zlabel('Z')
-    ax1.set_title('3D Neuron Structure')
+    ax1.set_title('3D Neuron Structure of ' + os.path.basename(swc_file1).split('_')[0])
     
     # XY projection
     ax2 = fig.add_subplot(312)
@@ -239,15 +273,19 @@ def visualize_swc(swc_data, output_file='neuron_visualization.png'):
 
 def main():
     # REPLACE THIS with the path to your SWC file
-    swc_file1 = "/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/76182_reRoot_reSample_5000.swc"
+    #swc_file1 = "/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/76182_reRoot_reSample_5000.swc"
+    print(f'Loading SWC file: {swc_file1}')
     #swc_file2 = "~/NeuronProject/CloudvolNeuron_Test/76199_reRoot_reSample_5000.swc"
     #swc_file3 = "~/NeuronProject/CloudvolNeuron_Test/76200_reRoot_reSample_5000.swc"
 
-    print(f"Loading SWC file: {swc_file1}")
+    print(os.path.basename(swc_file1).split('_')[0]) # this will print the base name of the file without 
+    #the directory path, and then split it by the underscore character and take the first part 
+    # (which is the ID of the neuron). The '[0]' at the end is used to select the first element 
+    # of the resulting list from the split operation.
     swc_data = load_swc(swc_file1)
     
     print("Visualizing neuron...")
-    visualize_swc(swc_data, output_file='76182.png')
+    visualize_swc(swc_data, skeleton_id, output_file='76182.png')
 
 if __name__ == '__main__':
     main()'''
