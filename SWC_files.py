@@ -13,10 +13,15 @@ import neuron
 from neuron import n
 from neuron import h, gui
 from neuron.units import ms, mV, um
-import os # os stands for operating system, and it's a built-in Python module that provides a way to interact with 
-# the underlying operating system. It allows you to perform various tasks such as file and directory manipulation, 
-# environment variable access, and more. In this code, we will use the os module to check if the specified SWC file 
-# exists before attempting to load it.
+import os # os stands for operating system, and it's a built-in Python module that provides a way to interact with the underlying operating system. It allows you to perform various tasks such as file and directory manipulation, environment variable access, and more. 
+import pprint # pprint stands for "pretty-print" and is a built-in Python module that provides a way to print data structures in a more readable and organized format.
+import sys  # sys is a built-in Python module that provides access to some variables used or maintained by the interpreter and to functions that interact strongly with the interpreter. It allows you to manipulate the Python runtime environment, access command-line arguments, and perform various system-related tasks.
+
+def enablePrint():
+    sys.stdout = sys.__stdout__
+
+def disablePrint():
+    sys.stdout = open(os.devnull, 'w')
 
 print(f'VTK version: {vtk.VTK_VERSION}')
 
@@ -31,24 +36,113 @@ except ImportError:
     
 h.load_file('import3d.hoc')
 
-swc_path = 'SWC_files/your_file.swc'  # adjust!
-print("File exists?", os.path.exists(swc_path))
+# code to source only 1 SWC file.
+'''swc_path = '/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/76182.swc'  # adjust!
+print("File exists?", os.path.exists(swc_path))'''
 
-cell = h.Import3d_SWC_read()
-cell.quiet = 0  # show warnings
-cell.input(swc_path)
+swc_folder = '/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/SWC_files/'
+swc_files = [os.path.join(swc_folder, f) for f in os.listdir(swc_folder) if f.endswith('.swc')] #.join concatenates one or more paths. for f in os.listdir(swc_folder) iterates through all files in the specified folder, and if f.endswith('.swc') checks if the file has a .swc extension. If it does, the full path to the file is created by joining the folder path and the file name, and this path is added to the swc_files list. This results in a list of full paths to all SWC files in the specified folder.
 
-print("Parsed sections:", cell.sections.count())
-print("Total points:", cell.total_points)
+print()
+for count, swc_path in enumerate(swc_files, 1):
+    print(f'File #{count} to: {swc_path} ')
+print()
 
-# If count > 0, proceed
-i3d = h.Import3d_GUI(cell, 0)
-i3d.instantiate(None)
+offset = 0.0 # This variable will be used to shift the coordinates of each cell to prevent overlap in visualization. 
+all_cells = [] # this list will hold all the cell objects created from the SWC files. 
 
-print("After instantiate - sections in model:", len(list(h.allsec())))
+for swc_path in swc_files:
+    print("Loading SWC file:", swc_path)
+
+    reader = h.Import3d_SWC_read()
+    reader.input(swc_path)
+
+    importer = h.Import3d_GUI(reader, 0)
+
+    # Create a plain Python object to hold sections
+    class Cell:
+        def __init__(self):
+            self.sl = h.SectionList()   # real HOC SectionList
+
+    cell = Cell()
+
+    importer.instantiate(cell)
+
+    # After instantiation, collect only this cell's sections
+    for sec in h.allsec():
+        if sec not in [s for c in all_cells for s in getattr(c, "sl", [])]:
+            cell.sl.append(sec)
+
+    all_cells.append(cell)
+
+    # Now shift only sections belonging to this cell
+    for sec in cell.all:
+        n3d = int(h.n3d(sec=sec))
+        for i in range(n3d):
+            x = h.x3d(i, sec=sec)
+            y = h.y3d(i, sec=sec)
+            z = h.z3d(i, sec=sec)
+            d = h.diam3d(i, sec=sec)
+
+            h.pt3dchange(i, x + offset, y, z, d, sec=sec)
+
+    offset += 10000
+#---------------------------------------------------------------------------------------------------------------------------------------
+'''print('\nWhat exists in the object Cell:\n')
+pprint.pprint(dir(cell))
+print()
+# print("Total points:", cell.total_points) #doesn't work for some reason.
+
+print("\nAvailable attributes and methods in the Cell object that do not have '_' separating them: \n") # the methods aare separa
+for name in dir(cell):
+    if not name.startswith('_'):
+        print(name)
+
+for sec in h.allsec(): # h.allsec() returns a generator that yields all sections in the model. By converting it to a list, we can easily count the number of sections and iterate through them.
+    print(h.secname(sec=sec)) #By passing sec=sec, we specify which section's name we want to retrieve. This will print the name of each section in the model after instantiation.
+
+h.topology() # this function prints the connectivity of the sections in the model, showing how they are connected to each other. It provides a hierarchical view of the sections and their relationships.
+
+total_pts = 0
 for sec in h.allsec():
-    print(h.secname(sec=sec))
-h.topology()
+    total_pts += int(h.n3d(sec=sec))
+
+print("After instantiate - sections in model:", len(list(h.allsec()))) # this will print the total number of sections in the model after instantiation. By converting h.allsec() to a list, we can easily count the number of sections and print it out.
+print("Total 3D points in model:", total_pts) # points are the coordinates that define the morphology of the neuron. Each section can have multiple 3D points that describe its shape and structure. By summing up the number of 3D points across all sections, we can get an idea of the complexity of the neuron's morphology as represented in the model.
+
+print(cell.id)
+
+#print(cell.size()) 
+n = int(cell.id.size()) #By calling cell.id.size(), we can get the total number of points in the SWC file, which is stored in the variable n. This allows us to iterate through all the points and access their corresponding IDs and types for further processing or analysis.
+
+for i in range(n):
+    swc_id = int(cell.id.x[i]) # cell.id is a vector that contains the IDs of the points in the SWC file. By accessing cell.id.x[i], we can retrieve the ID of the i-th point. The int() function is used to convert the value to an integer for easier readability and processing.
+    swc_type = int(cell.type.x[i]) # cell.type is a vector that contains the types of the points in the SWC file. By accessing cell.type.x[i], we can retrieve the type of the i-th point. The int() function is used to convert the value to an integer for easier readability and processing. The type indicates whether the point corresponds to a soma, axon, dendrite, etc., based on the SWC format specifications.
+    print(f"Index {i}: ID={swc_id}, Type={swc_type}") # this will print the index of each point along with its corresponding ID and type. The index is simply the position of the point in the list, while the ID and type provide information about the specific characteristics of that point in the neuron's morphology. This can be useful for understanding the structure of the neuron and for further analysis or visualization.
+'''
+#---------------------------------------------------------------------------------------------------------------------------------------
+enablePrint()
+
+print("\nTotal sections:", len(list(h.allsec())))
+
+# code to visualize the morphology
+shapes = []  # keep references alive — NEURON GC will close windows if not stored!
+
+for i, cell in enumerate(all_cells):
+    sl = h.SectionList()
+    for sec in cell.all:
+        sl.append(sec=sec)
+    
+    shape = h.Shape(sl)
+    shape.exec_menu('3D Rotate')
+    shape.show(0)
+    shape.flush()
+    shapes.append(shape)         # critical — prevents garbage collection closing the window
+
+input("\nPress Enter to exit...\n")
+
+
+
 #=======================================================================================================================================================================
 #                Example 1: from: https://rutgersconnect-my.sharepoint.com/:w:/g/personal/jdd235_scarletmail_rutgers_edu/IQAh7VvfGQa8RbSowlGy6GQrAU_HWpM2j6IpUcMOXtNC3mE
 #=======================================================================================================================================================================
