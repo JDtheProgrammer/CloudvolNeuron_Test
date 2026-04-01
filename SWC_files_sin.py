@@ -39,7 +39,7 @@ h.load_file("import3d.hoc")
 # =========================
 # Load SWC file
 # =========================
-swc_path = '/home/jd/NeuronProject/CloudvolNeuron_Test/SWC_files/76182_reRoot_reSample_5000.swc'
+swc_path = '/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/SWC_files/76182_reRoot_reSample_5000.swc'
 
 print("File exists?", os.path.exists(swc_path))
 print("Loading SWC file:", swc_path)
@@ -328,7 +328,9 @@ all_segment_keys = soma_segment_keys + non_soma_segment_keys
 # STEP 8 — CORRELATION + CLUSTERING
 # ===================================================================================================
 
-def compute_correlation_clusters(v_dict, reference_key, all_keys):
+def compute_correlation_clusters(v_dict, reference_key, all_keys): 
+# v_dict: is the dictionary of voltage traces for all segments; reference_key: is the key of the stimulated segment;
+# reference_key: is the key of the stimulated segment; we will compute Spearman r of every other segment vs this reference segment, to see how similar their voltage traces are to the stimulated segment.
     """
     Computes Spearman r for every segment in all_keys vs reference_key.
     Auto-selects k (2..8) by silhouette score on the 1-D correlation values.
@@ -351,8 +353,12 @@ def compute_correlation_clusters(v_dict, reference_key, all_keys):
     X = np.array([corr_values[k] for k in all_keys]).reshape(-1, 1)
 
     # Auto-select k via silhouette score
-    best_k     = 2
-    best_score = -1.0
+    # what is silhouette score? it measures how well-separated the clusters are; ranges from -1 to 1, higher is better
+    # why is it called silhouette score? because it looks at how similar each point is to its own cluster (cohesion) vs other clusters (separation), like a silhouette in the distance
+
+    best_k     = 2 # why is the best k, 2? because silhouette score is only defined for k >= 2, and we want to allow up to 8 clusters but not more than the number of segments
+    best_score = -1.0 # why is the best score, -1? because silhouette score ranges from -1 to 1, and higher is better, so we start with the lowest possible score
+
     for k in range(2, min(9, len(all_keys))):
         km = KMeans(n_clusters=k, random_state=42, n_init='auto')
         labels = km.fit_predict(X)
@@ -443,6 +449,7 @@ print_correlation_table(corr2, clust2, all_segment_keys,
 # STEP 11 — NODE SUMMARY
 # ===================================================================================================
 print("\nNode summary:\n")
+node_to_segment = {} # node ID -> best matching segment key (e.g. "SectionName(x.xx)")
 seg_peak = {k: np.max(v2[k]) for k in v2}
 
 for nid in node_order:
@@ -469,6 +476,7 @@ for nid in node_order:
                 best_dist = dist
                 best_key  = key
 
+    node_to_segment[nid] = best_key
     peak = seg_peak.get(best_key, None)
 
     if best_key in soma_index:
@@ -601,7 +609,7 @@ def plot_correlation_panel(corr_values, cluster_ids, cluster_colors, all_keys,
                              markerfacecolor='grey', markersize=9,
                              label="Soma (S#) / Non-soma (#)")
     ax.legend(handles=cluster_handles + [soma_handle],
-              loc='lower right', fontsize=8, framealpha=0.9)
+              loc='upper left', fontsize=8, framealpha=0.9)
 
 
 fig_c, axes_c = plt.subplots(2, 1, figsize=(14, 8))
@@ -627,4 +635,47 @@ print("Saved: neuron_correlation_clusters.png")
 
 plt.show()
 
-input("Press Enter to exit...")
+# ── Export SWC_files_sin.py ──────────────
+import json
+
+export = {
+    "node_to_segment": {str(k): v for k, v in node_to_segment.items()}, 
+    "nodes": [
+        {
+            "id":      nid,
+            "x":       nodes[nid]["x"],
+            "y":       nodes[nid]["y"],
+            "z":       nodes[nid]["z"],
+            "type":    nodes[nid]["type"],
+            "parent":  nodes[nid]["parent_id"],
+            "radius":  nodes[nid]["radius"],
+        }
+        for nid in node_order
+    ],
+    "stim_key": stim_key,
+    "runs": {
+        "1ms": {
+            "corr":    {k: float(corr1[k])  for k in all_segment_keys},
+            "cluster": {k: int(clust1[k])   for k in all_segment_keys},
+            "peak":    {k: float(np.max(v1[k])) for k in v1},
+            "k":       int(k1),
+        },
+        "1s": {
+            "corr":    {k: float(corr2[k])  for k in all_segment_keys},
+            "cluster": {k: int(clust2[k])   for k in all_segment_keys},
+            "peak":    {k: float(np.max(v2[k])) for k in v2},
+            "k":       int(k2),
+        },
+    },
+    "segment_labels":    segment_labels,
+    "soma_keys":         soma_segment_keys,
+    "non_soma_keys":     non_soma_segment_keys,
+    "soma_index":        soma_index,
+    "non_soma_index":    {k: int(v) for k, v in non_soma_index.items()},
+}
+
+with open("neuron_morphology_data.json", "w") as f:
+    json.dump(export, f)
+print("Exported: neuron_morphology_data.json")
+
+#input("Press Enter to exit...")
