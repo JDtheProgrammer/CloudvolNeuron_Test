@@ -39,7 +39,7 @@ h.load_file("import3d.hoc")
 # =========================
 # Load SWC file
 # =========================
-swc_path = '/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/SWC_files/76182_reRoot_reSample_5000.swc'
+swc_path = '/home/jd/NeuronProject/CloudvolNeuron_Test/SWC_files/76182_reRoot_reSample_5000.swc'
 
 print("File exists?", os.path.exists(swc_path))
 print("Loading SWC file:", swc_path)
@@ -389,7 +389,115 @@ corr2, clust2, k2, centers2 = compute_correlation_clusters(v2, stim_key, all_seg
 
 print(f"\nAuto-selected k (1 ms run)  : {k1}")
 print(f"Auto-selected k (1 s  run)  : {k2}")
+# ===================================================================================================
+# STEP 8b — BRANCH LEVEL LABELING
+# ===================================================================================================
+# Insert this AFTER the lines:
+#   corr1, clust1, k1, centers1 = compute_correlation_clusters(...)
+#   corr2, clust2, k2, centers2 = compute_correlation_clusters(...)
 
+def assign_branch_labels(sections, soma_node_ids, nodes):
+    from collections import defaultdict
+
+    node_to_sections_starting = defaultdict(list)
+    for i, path in enumerate(sections):
+        node_to_sections_starting[path[0]].append(i)
+
+    node_to_section_ending = {}
+    for i, path in enumerate(sections):
+        node_to_section_ending[path[-1]] = i
+
+    true_root_nid = next(nid for nid, d in nodes.items() if d['parent_id'] == -1)
+
+    root_section_indices = []
+    for i, path in enumerate(sections):
+        start = path[0]
+        start_parent = nodes[start]['parent_id']
+        if (start == true_root_nid or
+            start_parent == true_root_nid or
+            start not in node_to_section_ending):
+            root_section_indices.append(i)
+
+    section_branch_label = {}
+    node_branch_label    = {}
+
+    # Global letter counter per depth level — incremented only when a NEW branch is created
+    depth_letter_counter = defaultdict(int)
+
+    sys.setrecursionlimit(10000)
+
+    def dfs(sec_idx, depth, label):
+        """
+        label: already-computed label for this section (e.g. '1a', '2b')
+        """
+        section_branch_label[sec_idx] = label
+        for nid in sections[sec_idx]:
+            node_branch_label[nid] = label
+
+        end_node = sections[sec_idx][-1]
+        child_sec_indices = [c for c in node_to_sections_starting.get(end_node, [])
+                             if c != sec_idx]
+
+        if len(child_sec_indices) == 0:
+            # Leaf — nothing to do
+            return
+        elif len(child_sec_indices) == 1:
+            # Unbranched continuation — inherit the SAME label
+            dfs(child_sec_indices[0], depth, label)
+        else:
+            # Branch point — each child is a NEW section at depth+1 with its own global letter
+            for child_idx in child_sec_indices:
+                new_depth = depth + 1
+                letter_idx = depth_letter_counter[new_depth]
+                depth_letter_counter[new_depth] += 1
+                letter = chr(ord('a') + letter_idx) if letter_idx < 26 else f"z{letter_idx - 25}"
+                child_label = f"{new_depth}{letter}"
+                dfs(child_idx, new_depth, child_label)
+
+    # Seed each root section at depth 1 with its own global letter
+    for i in root_section_indices:
+        letter_idx = depth_letter_counter[1]
+        depth_letter_counter[1] += 1
+        letter = chr(ord('a') + letter_idx) if letter_idx < 26 else f"z{letter_idx - 25}"
+        dfs(i, 1, f"1{letter}")
+
+    return section_branch_label, node_branch_label
+
+# Run branch labeling
+section_branch_label, node_branch_label = assign_branch_labels(
+    sections, soma_node_ids, nodes
+)
+
+# Map every segment key to a branch label via closest node
+seg_key_to_branch = {}
+
+for sec in h.allsec():
+    n3d_n = sec.n3d()
+    if n3d_n == 0:
+        continue
+    total_arc = sec.arc3d(n3d_n - 1)
+    if total_arc == 0:
+        continue
+    arc_fracs = np.array([sec.arc3d(i) / total_arc for i in range(n3d_n)])
+
+    for seg in sec:
+        key = f"{sec.name()}({seg.x:.3f})"
+        idx = int(np.argmin(np.abs(arc_fracs - seg.x)))
+        seg_xyz = np.array([sec.x3d(idx), sec.y3d(idx), sec.z3d(idx)])
+
+        best_nid  = None
+        best_dist = float('inf')
+        for nid, nd in nodes.items():
+            d = np.linalg.norm(seg_xyz - np.array([nd['x'], nd['y'], nd['z']]))
+            if d < best_dist:
+                best_dist = d
+                best_nid  = nid
+
+        seg_key_to_branch[key] = node_branch_label.get(best_nid, "?")
+
+print("\nSample branch labels (first 10 segments):")
+for k in all_segment_keys[:10]:
+    print(f"  {k:45s}  branch={seg_key_to_branch.get(k,'?')}")
 
 # ===================================================================================================
 # STEP 9 — CLUSTER COLOR MAPS
@@ -677,5 +785,113 @@ export = {
 with open("neuron_morphology_data.json", "w") as f:
     json.dump(export, f)
 print("Exported: neuron_morphology_data.json")
+
+# ===================================================================================================
+# STEP 14 — BRANCH-LEVEL CORRELATION DOT PLOT
+# ===================================================================================================
+# Insert this AFTER Step 13 (after neuron_correlation_clusters.png is saved)
+
+def sort_branch_labels(labels):
+    """
+    Sort branch labels numerically then alphabetically:
+    1, 2a, 2b, 3a, 3b, 3c, 4a, 4b ...
+    """
+    def key_fn(lbl):
+        digits = ''.join(c for c in lbl if c.isdigit())
+        letters = ''.join(c for c in lbl if c.isalpha())
+        return (int(digits) if digits else 0, letters)
+    return sorted(labels, key=key_fn)
+
+
+def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
+                                     seg_key_to_branch, all_keys, k,
+                                     stim_key, segment_labels, ax, title, v_dict):
+    """
+    X-axis : branch label (1, 2a, 2b, 3a, ...)  — jittered for readability
+    Y-axis : Spearman r vs stimulated segment
+    Color  : cluster membership
+    Shape  : diamond = soma, circle = non-soma
+    """
+    # Collect all unique branch labels and sort them
+    all_labels = list({seg_key_to_branch.get(k, '?') for k in all_keys})
+    all_labels = sort_branch_labels([l for l in all_labels if l != '?'])
+    if '?' in {seg_key_to_branch.get(k, '?') for k in all_keys}:
+        all_labels.append('?')
+
+    label_to_x = {lbl: i for i, lbl in enumerate(all_labels)}
+
+    rng = np.random.default_rng(42)   # reproducible jitter
+
+    for key in all_keys:
+        if key not in v_dict:
+            continue
+        r      = corr_values.get(key, 0.0)
+        c      = cluster_ids.get(key, 0)
+        color  = cluster_colors[c]
+        blabel = seg_key_to_branch.get(key, '?')
+        x_pos  = label_to_x.get(blabel, len(all_labels))
+        jitter = rng.uniform(-0.25, 0.25)
+
+        marker = 'D' if key in soma_index else 'o'
+        size   = 60  if key in soma_index else 35
+
+        ax.scatter(x_pos + jitter, r,
+                   color=color, marker=marker, s=size,
+                   alpha=0.75, edgecolors='white', linewidths=0.3, zorder=3)
+
+    # Highlight stimulated segment
+    if stim_key in v_dict:
+        r_stim = corr_values.get(stim_key, 1.0)
+        bl     = seg_key_to_branch.get(stim_key, '?')
+        x_stim = label_to_x.get(bl, 0)
+        ax.scatter(x_stim, r_stim, color='black', marker='*', s=200,
+                   zorder=5, label='Stimulated segment')
+
+    ax.axhline(0, color='k', lw=0.8, linestyle='--', alpha=0.4)
+    ax.set_xticks(range(len(all_labels)))
+    ax.set_xticklabels(all_labels, rotation=45, ha='right', fontsize=8)
+    ax.set_xlabel("Branch level")
+    ax.set_ylabel("Spearman r vs stimulated segment")
+    ax.set_title(title)
+    ax.grid(alpha=0.25, axis='y')
+
+    # Legend
+    cluster_handles = [
+        plt.Line2D([0], [0], marker='o', color='w',
+                   markerfacecolor=cluster_colors[c], markersize=8,
+                   label=f"Cluster {c}")
+        for c in range(k)
+    ]
+    stim_handle = plt.Line2D([0], [0], marker='*', color='w',
+                             markerfacecolor='black', markersize=12,
+                             label='Stimulated')
+    soma_handle = plt.Line2D([0], [0], marker='D', color='w',
+                             markerfacecolor='grey', markersize=8,
+                             label='Soma segment')
+    ax.legend(handles=cluster_handles + [stim_handle, soma_handle],
+              loc='lower right', fontsize=8, framealpha=0.9)
+
+
+fig_b, axes_b = plt.subplots(2, 1, figsize=(16, 10))
+
+plot_branch_correlation_dotplot(
+    corr1, clust1, cluster_colors1,
+    seg_key_to_branch, all_segment_keys, k1,
+    stim_key, segment_labels, axes_b[0],
+    f"Correlation by Branch Level — 1 ms stimulus  (k={k1})",
+    v_dict=v1
+)
+plot_branch_correlation_dotplot(
+    corr2, clust2, cluster_colors2,
+    seg_key_to_branch, all_segment_keys, k2,
+    stim_key, segment_labels, axes_b[1],
+    f"Correlation by Branch Level — 1 s stimulus  (k={k2})",
+    v_dict=v2
+)
+
+plt.tight_layout()
+plt.savefig("neuron_branch_correlation.png", dpi=150)
+print("Saved: neuron_branch_correlation.png")
+plt.show()
 
 #input("Press Enter to exit...")
