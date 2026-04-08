@@ -39,7 +39,7 @@ h.load_file("import3d.hoc")
 # =========================
 # Load SWC file
 # =========================
-swc_path = '/home/jd/NeuronProject/CloudvolNeuron_Test/SWC_files/76182_reRoot_reSample_5000.swc'
+swc_path = '/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/SWC_files/76182_reRoot_reSample_5000.swc'
 
 print("File exists?", os.path.exists(swc_path))
 print("Loading SWC file:", swc_path)
@@ -428,7 +428,7 @@ def assign_branch_labels(sections, soma_node_ids, nodes):
 
     def dfs(sec_idx, depth, label):
         """
-        label: already-computed label for this section (e.g. '1a', '2b')
+        label: fully qualified path label e.g. '1a', '1a-2a', '1a-2a-3b'
         """
         section_branch_label[sec_idx] = label
         for nid in sections[sec_idx]:
@@ -439,26 +439,20 @@ def assign_branch_labels(sections, soma_node_ids, nodes):
                              if c != sec_idx]
 
         if len(child_sec_indices) == 0:
-            # Leaf — nothing to do
             return
         elif len(child_sec_indices) == 1:
             # Unbranched continuation — inherit the SAME label
             dfs(child_sec_indices[0], depth, label)
         else:
-            # Branch point — each child is a NEW section at depth+1 with its own global letter
-            for child_idx in child_sec_indices:
-                new_depth = depth + 1
-                letter_idx = depth_letter_counter[new_depth]
-                depth_letter_counter[new_depth] += 1
-                letter = chr(ord('a') + letter_idx) if letter_idx < 26 else f"z{letter_idx - 25}"
-                child_label = f"{new_depth}{letter}"
-                dfs(child_idx, new_depth, child_label)
+            # Branch point — child label = parent_label + "-" + local letter
+            for local_idx, child_idx in enumerate(child_sec_indices):
+                letter = chr(ord('a') + local_idx) if local_idx < 26 else f"z{local_idx - 25}"
+                child_label = f"{label}-{letter}"
+                dfs(child_idx, depth + 1, child_label)
 
-    # Seed each root section at depth 1 with its own global letter
-    for i in root_section_indices:
-        letter_idx = depth_letter_counter[1]
-        depth_letter_counter[1] += 1
-        letter = chr(ord('a') + letter_idx) if letter_idx < 26 else f"z{letter_idx - 25}"
+    # Seed each root section
+    for local_idx, i in enumerate(root_section_indices):
+        letter = chr(ord('a') + local_idx) if local_idx < 26 else f"z{local_idx - 25}"
         dfs(i, 1, f"1{letter}")
 
     return section_branch_label, node_branch_label
@@ -467,6 +461,44 @@ def assign_branch_labels(sections, soma_node_ids, nodes):
 section_branch_label, node_branch_label = assign_branch_labels(
     sections, soma_node_ids, nodes
 )
+# Re-index using only labels that actually have nodes assigned
+# This avoids empty sections consuming letter slots
+all_old_labels_combined = sorted(
+    set(node_branch_label.values()) | set(section_branch_label.values()),
+    key=lambda l: (len(l.split('-')), l)
+)
+depth_counter = defaultdict(int)
+label_remap = {}
+for old_lbl in all_old_labels_combined:
+    depth = len(old_lbl.split('-'))
+    i = depth_counter[depth]
+    depth_counter[depth] += 1
+    letter = chr(ord('a') + i) if i < 26 else f"z{i - 25}"
+    label_remap[old_lbl] = f"{depth}{letter}"
+
+node_branch_label    = {nid: label_remap[lbl] for nid, lbl in node_branch_label.items()}
+section_branch_label = {sid: label_remap.get(lbl, lbl) for sid, lbl in section_branch_label.items()}
+
+# Now re-index AGAIN using only labels that appear in actual segments
+# First pass above handled KeyError; this pass makes letters contiguous
+used_labels = set(node_branch_label.values())
+used_old_labels = sorted(
+    {lbl for lbl, new in label_remap.items() if new in used_labels},
+    key=lambda l: (len(l.split('-')), l)
+)
+# Build final remap only from used labels
+depth_counter2 = defaultdict(int)
+label_remap2 = {}
+for old_lbl in used_old_labels:
+    new_lbl = label_remap[old_lbl]  # intermediate label e.g. '1d'
+    depth = len(old_lbl.split('-'))
+    i = depth_counter2[depth]
+    depth_counter2[depth] += 1
+    letter = chr(ord('a') + i) if i < 26 else f"z{i - 25}"
+    label_remap2[new_lbl] = f"{depth}{letter}"
+
+node_branch_label    = {nid: label_remap2.get(lbl, lbl) for nid, lbl in node_branch_label.items()}
+section_branch_label = {sid: label_remap2.get(lbl, lbl) for sid, lbl in section_branch_label.items()}
 
 # Map every segment key to a branch label via closest node
 seg_key_to_branch = {}
@@ -791,17 +823,14 @@ print("Exported: neuron_morphology_data.json")
 # ===================================================================================================
 # Insert this AFTER Step 13 (after neuron_correlation_clusters.png is saved)
 
-def sort_branch_labels(labels):
-    """
-    Sort branch labels numerically then alphabetically:
-    1, 2a, 2b, 3a, 3b, 3c, 4a, 4b ...
-    """
-    def key_fn(lbl):
-        digits = ''.join(c for c in lbl if c.isdigit())
-        letters = ''.join(c for c in lbl if c.isalpha())
-        return (int(digits) if digits else 0, letters)
-    return sorted(labels, key=key_fn)
+def branch_depth(lbl):
+    """Read leading digits only up to first letter: '1a'->1, '2c'->2, '12a'->12"""
+    import re
+    m = re.match(r'^(\d+)', lbl)
+    return int(m.group(1)) if m else 0
 
+def sort_branch_labels(labels):
+    return sorted(labels, key=branch_depth)
 
 def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
                                      seg_key_to_branch, all_keys, k,
@@ -818,7 +847,10 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
     if '?' in {seg_key_to_branch.get(k, '?') for k in all_keys}:
         all_labels.append('?')
 
-    label_to_x = {lbl: i for i, lbl in enumerate(all_labels)}
+    # X-axis = branch depth (1-based), dots jitter within that column
+    max_depth = max(branch_depth(l) for l in all_labels if l != '?')
+    label_to_x = {lbl: branch_depth(lbl) - 1 for lbl in all_labels}
+    all_labels_for_ticks = [str(d) for d in range(1, max_depth + 1)]
 
     rng = np.random.default_rng(42)   # reproducible jitter
 
@@ -848,10 +880,12 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
                    zorder=5, label='Stimulated segment')
 
     ax.axhline(0, color='k', lw=0.8, linestyle='--', alpha=0.4)
-    ax.set_xticks(range(len(all_labels)))
-    ax.set_xticklabels(all_labels, rotation=45, ha='right', fontsize=8)
+    ax.set_xticks(range(max_depth))
+    ax.set_xticklabels(all_labels_for_ticks, fontsize=9)
+    ax.set_xlabel("Branch depth from root")
     ax.set_xlabel("Branch level")
     ax.set_ylabel("Spearman r vs stimulated segment")
+    ax.set_ylim(-1.05, 1.05)
     ax.set_title(title)
     ax.grid(alpha=0.25, axis='y')
 
