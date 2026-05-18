@@ -1,9 +1,49 @@
 """
 MatplotlibVis.py
+================
 
-Provides NeuronMatplotlibVisualizer - a helper to build a 3D matplotlib
-visualization from a NEURON model's morphology and optionally show both
-NEURON and matplotlib GUIs together.
+Purpose
+-------
+Provide ``NeuronMatplotlibVisualizer``, a thin helper that traverses every
+section returned by ``neuron.n.allsec()``, extracts its 3D point list
+(``x3d``, ``y3d``, ``z3d``, ``diam3d``), and renders the resulting
+morphology in a matplotlib 3D axis. The class can also pair this
+matplotlib view with NEURON's native ``PlotShape`` window so both GUIs
+appear simultaneously.
+
+Inputs
+------
+A live NEURON model in the calling process. The class queries each
+``Section`` for its 3D points; if a section has no explicit ``pt3d``
+list, ``n.define_shape()`` (called before plotting) makes NEURON compute
+one automatically from L / diam.
+
+Optionally a ``neuron.h.PlotShape`` (or ``n.PlotShape``) instance can be
+supplied to ``wrap_and_show`` / ``show_both`` so the NEURON shape window
+is opened alongside the matplotlib figure.
+
+Outputs
+-------
+* A ``matplotlib.figure.Figure`` returned from ``plot()``.
+* If ``save_path`` is given, an image file (PNG by default) at 150 dpi.
+* If ``show`` is True, an interactive matplotlib window.
+
+How the module works
+--------------------
+1. ``_read_section_points`` extracts 3D coordinates for one section.
+2. ``plot`` iterates over all sections, drawing each segment as a line
+   whose width scales with the local diameter and adding a scatter
+   marker at every 3D point.
+3. ``wrap_show`` / ``wrap_and_show`` store a reference to a NEURON
+   ``PlotShape`` so it can be displayed later via ``show_both``.
+4. ``show_both`` opens the stored PlotShape and re-draws the matplotlib
+   view, recovering gracefully if either GUI is unavailable.
+
+Required modules
+----------------
+    neuron (imported lazily inside the plotting methods),
+    matplotlib, mpl_toolkits.mplot3d, numpy,
+    Python stdlib: typing.
 
 Usage example (in BallStickDemo.py):
 
@@ -11,7 +51,9 @@ Usage example (in BallStickDemo.py):
     viz = NeuronMatplotlibVisualizer()
     ps = n.PlotShape(True)
     viz.wrap_and_show(ps)
-    viz.show_both(ps, 0)  # Shows both NEURON GUI and Matplotlib 3D
+    viz.show_both(ps, 0)   # show NEURON PlotShape and matplotlib 3D
+
+Author / Project: CloudvolNeuron_Test
 """
 
 from typing import Optional
@@ -21,7 +63,30 @@ import numpy as np
 
 
 class NeuronMatplotlibVisualizer:
-    """Plot NEURON morphology in matplotlib 3D and integrate with NEURON's GUI."""
+    """Plot NEURON morphology in matplotlib 3D and integrate with NEURON's GUI.
+
+    Parameters
+    ----------
+    scale_lw : float
+        Multiplier converting the local section diameter (um) into the
+        matplotlib line width used to draw that segment. Default 0.05
+        keeps drawings legible without saturating the axes for thick
+        somata.
+    scatter_scale : float
+        Multiplier converting diameter (um) into scatter marker size.
+        The marker area is ``(d * scatter_scale) ** 2``.
+    figsize : tuple[float, float]
+        Inches passed to ``plt.figure(figsize=...)``.
+
+    Attributes
+    ----------
+    _last_plotshape : neuron.PlotShape or None
+        Most recently registered NEURON PlotShape, used by ``show_both``.
+    _last_save_path : str or None
+        Save path remembered for re-use by ``show_both``.
+    _last_show_flag : bool
+        Whether to call ``plt.show`` after the matplotlib build.
+    """
 
     def __init__(self, scale_lw: float = 0.05, scatter_scale: float = 0.5, figsize=(7, 6)):
         self.scale_lw = scale_lw
@@ -35,7 +100,16 @@ class NeuronMatplotlibVisualizer:
     # Internal helper to extract 3D morphology from a NEURON section
     # -------------------------------------------------------------------------
     def _read_section_points(self, sec):
-        """Return (xs, ys, zs, ds) for a section."""
+        """Return ``(xs, ys, zs, ds)`` for one ``neuron.Section``.
+
+        Prefers the section's explicit ``n3d()`` point list. If the section
+        has none, falls back to ``psection()["morphology"]["pt3d"]``. If
+        neither yields points, returns four empty lists so the caller can
+        skip the section silently.
+
+        All coordinates are returned in micrometres, matching NEURON's
+        internal convention.
+        """
         n3d = int(sec.n3d())
         if n3d > 0:
             xs = [sec.x3d(i) for i in range(n3d)]

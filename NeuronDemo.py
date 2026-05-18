@@ -1,225 +1,180 @@
-import neuron
-from neuron import h
-'''import neuron.h
-import neuron.rdx
-import neuron.gui2'''
+"""
+NeuronDemo.py
+=============
+
+Purpose
+-------
+Introductory NEURON walkthrough: build a single-section "soma-only" neuron,
+inject a sustained current via an ``IClamp``, run a 40 ms simulation, and
+demonstrate how to record and persist the membrane potential trace using
+several file formats (CSV / JSON / Python pickle).
+
+This script accompanies the early sections of the NEURON Python tutorial.
+Most of the plotting / persistence demonstrations are present as commented
+blocks so that the file remains a self-contained reference for the user to
+selectively enable.
+
+Inputs
+------
+None as files. All parameters are hard-coded:
+    * Morphology: soma.L = soma.diam = 20 um.
+    * Stimulus  : IClamp at soma(0.5), delay = 0 ms, dur = 15 ms,
+                  amp = 0.9 nA (large amplitude so the cell spikes).
+    * Integration: finitialize(-65 mV), continuerun(40 ms).
+
+The optional CSV / JSON / pickle read demos accept the corresponding files
+(``data.csv`` / ``data.json`` / ``data.p``) produced by the matching write
+demos earlier in the same script.
+
+Outputs
+-------
+* Console: NEURON version, the ``soma.psection()`` dictionary (pretty-
+  printed) and the soma length / diameter to confirm geometry settings.
+* When the matplotlib block is enabled, a figure of v(t) at soma(0.5).
+* When the persistence blocks are enabled:
+      data.csv  -- two columns (t [ms], v [mV]); no header.
+      data.json -- dict {"t": [...], "v": [...]} with indent = 4.
+      data.p    -- pickle of {"t": Vector, "v": Vector}; preserves the
+                   NEURON Vector type on reload.
+
+How the script works
+--------------------
+1. Build a single section ``soma`` with L = diam = 20 um.
+2. Print its ``psection()`` dictionary to confirm parameters.
+3. Attach an IClamp at soma(0.5) with a 15 ms / 0.9 nA pulse starting at t = 0.
+4. Record references to soma(0.5).v and the global simulation time t.
+5. Load ``stdrun.hoc``, ``finitialize`` at -65 mV, ``continuerun`` to 40 ms.
+6. Optionally serialise (t, v) to CSV / JSON / pickle and plot the loaded
+   data with matplotlib or plotnine.
+
+Required modules
+----------------
+    neuron (with the ``n`` interface and ``neuron.units``),
+    matplotlib, pandas, plotnine, numpy,
+    Python stdlib: csv, json, pickle, pprint, textwrap, math.
+
+Author / Project: CloudvolNeuron_Test
+"""
+
+# -----------------------------------------------------------------------------
+# Imports
+# -----------------------------------------------------------------------------
+import csv
+import json
+import math
+import pickle
 import pprint
 import textwrap
-'''from bokeh.io import output_notebook 
-import bokeh.plotting as plt''' # for jupyter 
-import matplotlib.pyplot as plt
-import csv
-import plotnine as p9
-import pandas as pd
-import json
-import pickle
-import numpy as np
-import math
 from math import pi
 
-print(neuron.__version__)
-from neuron import n 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import plotnine as p9
+
+import neuron
+from neuron import h          # legacy/hoc-style interface (used here for stdrun)
+from neuron import n          # modern python-first interface
 from neuron.units import ms, mV, um
 
-'''A Section is the basic morphological building-block in NEURON. We typically think of a Section
- as an unbranched cable, but it can also be used to represent a soma. Thus a simple model neuron 
- with only a soma can be created as in:'''
+print("NEURON version:", neuron.__version__)
 
-# creat a cell with a single section (soma)
-soma = n.Section('soma')
+# -----------------------------------------------------------------------------
+# Step 1 - build a single-compartment cell
+# -----------------------------------------------------------------------------
+# A NEURON Section is the basic morphological building block. For a soma-only
+# model it represents an unbranched cylinder approximating a roughly
+# spherical cell body.
+soma = n.Section("soma")
 
-# Aside 1: NEURON’s n.topology function
-'''NEURON’s n.topology() function displays the topological structure of the entire model, indicating 
-which sections are connected to which sections, where they are connected, and how many segments each 
-section is divided into.'''
+# n.topology() prints how sections are connected. With only one section the
+# output is "|-|       soma(0-1)".
+n.topology()
 
-n.topology() # output = |-|       soma(0-1)
-
-#Aside 2: The psection method (properties section)
-
-'''soma.psection()'''
-
-'''Since this is a dictionary, we can extract any properties we want using square brackets. For example,
- the length of the section is:'''
-
-## soma.psection()["morphology"]["L"]
-
+# psection() returns a nested dict of every property NEURON tracks for the
+# section (morphology, mechanisms, ion species, etc.).
 pprint.pprint(soma.psection())
-
-
-'''soma.psection()["morphology"]["L"]
 print()
-pprint.pprint(soma.psection()["morphology"]["L"])
-'''
+
+# Set geometry. With L = diam = 20 um the cylinder has surface area
+# pi * d * L = pi * 20 * 20 ~ 1257 um^2, which roughly matches a small
+# spherical soma of the same diameter for electrical-only modelling.
+soma.L = 20 * um
+soma.diam = 20 * um
+print("L =", soma.psection()["morphology"]["L"], "um")
+print("diam =", soma.psection()["morphology"]["diam"], "um")
 print()
-soma.L = 20 # set the length of the section to 20 microns
-soma.diam = 20 # set the diameter of the section to 20 microns
-print(soma.psection()["morphology"]["L"])
-print(soma.psection()["morphology"]["diam"])
 
+# -----------------------------------------------------------------------------
+# Step 2 - attach a current clamp
+# -----------------------------------------------------------------------------
+# IClamp is a "point process": a localised current source attached to a
+# specific segment. Here it sits at the centre of the soma.
+iclamp = n.IClamp(soma(0.5))
+
+# Pulse parameters. The amplitude is deliberately large so a passive soma
+# will charge well above rest within 15 ms.
+iclamp.delay = 0       # ms  - turn on immediately at t = 0
+iclamp.dur   = 15      # ms  - pulse duration
+iclamp.amp   = 0.9     # nA  - pulse amplitude
+
+# Echo psection() now that the point process is attached -- the dictionary
+# will list iclamp under "point_processes".
+print(soma.psection())
 print()
-dir(soma)
-'''
-# pprint.pprint(dir(soma))
 
-# print(textwrap.fill(", ".join(dir(n))))
+# -----------------------------------------------------------------------------
+# Step 3 - set up recording vectors
+# -----------------------------------------------------------------------------
+# NEURON's Vector.record() takes a *reference* to a variable (prefixed _ref_)
+# and stores its value on every integration step.
+v = n.Vector().record(soma(0.5)._ref_v)   # mV at soma midpoint
+t = n.Vector().record(n._ref_t)           # ms global simulation time
 
-help(soma.connect) '''
-
-#soma.insert(n.hh)
-#pprint.pprint(soma.insert(n.hh))
-
-''' # The number of segments within a section is given by the variable, nseg. 
-To summarize, we access sections by their name and segments by some location on the section.
-Section: section
-Segment: section(loc)
-
-#Using the Python type function can tell us what a variable is:
-print(f"type(soma) = {type(soma)}")
-print(f"type(soma(0.5)) = {type(soma(0.5))}")
-
-# Segment variables follow the idiom:
-
-'section(loc).var' # or 
-'section(loc).mech.var' # or 
-'section(loc).var_mech' # the first form is preferred 
-'''
-
-'''print()
-mech = soma(0.5).hh
-print(dir(mech))
-
-print()
-print(mech.gkbar)
-print(soma(0.5).hh.gkbar)'''
-
-
-iclamp = n.IClamp(soma(0.5)) # create an IClamp object at the center of the soma
-'''An IClamp is a Point Process. Point processes are point sources of current. 
-When making a new PointProcess, you pass the segment to which it will bind.'''
-
-print()
-#print([item for item in dir(iclamp) if not item.startswith("__")])
-'''In particular, we notice three key properties of a current clamp: amp – the amplitude (in nA),
-delay – the time the current clamp switches on (in ms), and dur – how long (in ms) the current clamp stays on.
-Let’s set these values:'''
-
-iclamp.delay = 0
-iclamp.dur = 15
-iclamp.amp = 0.9
-
-
-soma.psection()
-print(soma.psection())           
-# pprint.pprint(soma.psection())    
-
-''' we will record the membrane potential, which is soma(0.5).v and the corresponding 
-time points (n.t). References to variables are available by preceding the last part of the 
-variable name with a _ref_'''
-print()
-v = n.Vector().record(soma(0.5)._ref_v)  # Membrane potential vector
-t = n.Vector().record(n._ref_t)  # Time stamp vector
-
-'''NEURON h module provides the low level fadvance function for advancing one time step. 
-For higher-level simulation control specification, we load NEURON’s stdrun library'''
+# -----------------------------------------------------------------------------
+# Step 4 - run the simulation
+# -----------------------------------------------------------------------------
+# stdrun.hoc supplies high-level control routines (fadvance, finitialize,
+# continuerun) used below. Load it before calling them.
 n.load_file("stdrun.hoc")
-n.finitialize(-65 * mV) # initialize the resting membrane potential to -65 mV
+n.finitialize(-65 * mV)     # set every state variable to its resting value
+n.continuerun(40 * ms)      # integrate forward to t = 40 ms
 
-n.continuerun(40 * ms) #continue the simulation from the current time (0) until 40 ms:
+# -----------------------------------------------------------------------------
+# Optional: plot v(t)
+# -----------------------------------------------------------------------------
+# Uncomment to render an interactive matplotlib window of the trace.
+# plt.figure()
+# plt.plot(list(t), list(v))
+# plt.xlabel("t (ms)")
+# plt.ylabel("v (mV)")
+# plt.show()
 
-'''f = plt.figure(x_axis_label="t (ms)", y_axis_label="v (mV)")
-f.line(t, v, line_width=2)
-plt.show(f)''' # for jupypter 
-
-#plt.figure()
-#plt.plot(t, v)
-#plt.xlabel("t (ms)")
-#plt.ylabel("v (mV)")
-#plt.show()
-
-# Step 9: Saving and loading results
-'''The csv (comma separated variables) file format is widely used for data interchange, 
-and can be used to transfer data to MATLAB, Excel, etc without writing any special conversion code.'''
-
-# writting the data to a csv file
-#with open("data.csv", "w") as f:
-#    csv.writer(f).writerows(zip(t, v))
-
-# reading the data from a csv file
-#with open("data.csv") as f:
- #   reader = csv.reader(f)
-#  tnew, vnew = zip(*[[float(val) for val in row] for row in reader if row])
-'''The argument to the zip is a nested list comprehension; the zip and the asterisk together effectively 
-transpose the data turning it from a list of (t, v) pairs into a list of t values and a list of v values. 
-For loading more variables, the right hand side of the last line is unchanged; all that changes is that
- the variables need to be listed on the left; e.g. tnew, vnew, canew = zip(…)
-We can plot our newly loaded data (here with matplotlib) to see that it is the same as before:'''
-
-#plt.figure()
-#plt.plot(tnew, vnew)
-#plt.xlabel("t (ms)")
-#plt.ylabel("v (mV)")
-#plt.show()
-
-'''If the CSV file had a header row identifying the columns, then pd.read_csv would have handled the 
-names automatically and we would not have had to specify the last two arguments above.)
-And now plot with plotnine’s version of ggplot. This function provides an implementation of Wilkinson’s 
-Grammar of Graphics; as such, the interface is essentially identical to the R function of the same 
-name.'''
-
-#data = pd.read_csv("data.csv", header=None, names=["t", "v"])
-#g = (p9.ggplot(data, p9.aes(x="t", y="v")) + p9.geom_path())
-#g.save("plot.png")
-
-## Alternative: Using JSON format
-''' Here we built a dictionary with keys t and v, and stored their values as a list. Since JSON 
-is a language-independent format, it does not have a concept of NEURON Vectors, which is why we had 
-to create a list copy of them before saving. The indent=4 argument is optional, but indents the output 
-to make it more human-readable (at the cost of a larger file size).# Writting data to a JSON file
-
-with open("data.json", "w") as f:
-    json.dump({"t": list(t), "v": list(v)}, f, indent=4)
-
-# Reading data from a JSON file
-with open("data.json") as f:
-    data = json.load(f)
-tnew = data["t"]
-vnew = data["v"]
-
-plt.figure()
-plt.plot(tnew, vnew)
-plt.xlabel("t (ms)")
-plt.ylabel("v (mV)")
-plt.show()'''
-
-## Alternative: Using Python pickle format
-'This is slightly cleaner than the JSON solution above because it is Python specific and '
-'therefore able to explicitly encode NEURON Vector objects.'
-# writting
-'''with open("data.p", "wb") as f:
-    pickle.dump({"t": t, "v": v}, f)
-
-# reading
-with open("data.p", "rb") as f:
-    data = pickle.load(f)
-tnewp = data["t"]
-vnewp = data["v"]
-'Pickles in Python 3 are by default binary files, so we have to specify write and read flags of '
-'wb and rb respectively. We use a different variable name here than before simply to indicate that '
-'what is loaded in has type'
-
-type(tnewp) # (hoc.Vector)
-
-tnewp.hname() # and in particular is a NEURON Vector (Vector[2])
-
-type(tnew) # Unlike the other solutions provided, which construct regular Python lists (list)
-
-'This is a minor distinction though, as we’ve already seen list(vec) copies a Vector vec into a new list.'
-'Using n.Vector(old_list) makes a NEURON Vector that is a copy of old_list.'
-
-plt.figure()
-plt.plot(tnewp, vnewp)
-plt.xlabel("t (ms)")
-plt.ylabel("v (mV)")
-plt.show()'''
-
+# -----------------------------------------------------------------------------
+# Optional: persist the trace
+# -----------------------------------------------------------------------------
+# (A) CSV -- portable, human-readable, but loses NEURON's Vector type.
+#     File format: rows of "t,v" with no header.
+#     To enable, uncomment below:
+# with open("data.csv", "w") as f:
+#     csv.writer(f).writerows(zip(t, v))
+# with open("data.csv") as f:
+#     reader = csv.reader(f)
+#     tnew, vnew = zip(*[[float(val) for val in row] for row in reader if row])
+#
+# (B) JSON -- language-independent; Vectors must be converted to list first.
+#     To enable, uncomment below:
+# with open("data.json", "w") as f:
+#     json.dump({"t": list(t), "v": list(v)}, f, indent=4)
+# with open("data.json") as f:
+#     data = json.load(f)
+# tnew, vnew = data["t"], data["v"]
+#
+# (C) Pickle -- Python-specific; preserves NEURON Vector objects on reload.
+#     To enable, uncomment below:
+# with open("data.p", "wb") as f:
+#     pickle.dump({"t": t, "v": v}, f)
+# with open("data.p", "rb") as f:
+#     data = pickle.load(f)
+# tnewp, vnewp = data["t"], data["v"]
+# print(type(tnewp), tnewp.hname())  # hoc.Vector  -- Vector[<id>]

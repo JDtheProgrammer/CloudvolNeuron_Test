@@ -1,0 +1,567 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<meta name="ProgId" content="Word.Document">
+<meta name="Generator" content="Microsoft Word">
+<title>Methods - NEURON Simulation Scripts (CloudvolNeuron_Test)</title>
+<!--[if gte mso 9]><xml>
+<w:WordDocument>
+    <w:View>Print</w:View>
+    <w:Zoom>100</w:Zoom>
+    <w:DoNotOptimizeForBrowser/>
+</w:WordDocument>
+</xml><![endif]-->
+<style>
+@page WordSection1 {
+    size: 8.5in 11.0in;
+    margin: 1.0in 1.0in 1.0in 1.0in;
+    mso-page-orientation: portrait;
+}
+div.WordSection1 { page: WordSection1; }
+body {
+    font-family: "Calibri", "Helvetica", "Arial", sans-serif;
+    font-size: 11pt;
+    color: #1a1a1a;
+    line-height: 1.45;
+}
+h1 {
+    font-family: "Calibri", "Helvetica", sans-serif;
+    font-size: 22pt;
+    color: #1f3a5f;
+    margin-top: 0pt;
+    margin-bottom: 6pt;
+    border-bottom: 2pt solid #1f3a5f;
+    padding-bottom: 4pt;
+}
+h2 {
+    font-family: "Calibri", "Helvetica", sans-serif;
+    font-size: 16pt;
+    color: #2a4d7a;
+    margin-top: 20pt;
+    margin-bottom: 6pt;
+    border-bottom: 1pt solid #c8d2e0;
+    padding-bottom: 2pt;
+}
+h3 {
+    font-family: "Calibri", "Helvetica", sans-serif;
+    font-size: 13pt;
+    color: #2a4d7a;
+    margin-top: 14pt;
+    margin-bottom: 4pt;
+}
+h4 {
+    font-family: "Calibri", "Helvetica", sans-serif;
+    font-size: 11.5pt;
+    color: #2a4d7a;
+    margin-top: 10pt;
+    margin-bottom: 2pt;
+    font-style: italic;
+}
+p { margin-top: 0pt; margin-bottom: 6pt; }
+ul, ol { margin-top: 0pt; margin-bottom: 6pt; }
+li { margin-bottom: 2pt; }
+code, span.code, kbd {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 10.5pt;
+    background: #f3f4f7;
+    padding: 0pt 2pt;
+    border: 1px solid #e2e5ec;
+}
+pre {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 10pt;
+    background: #f7f8fb;
+    border: 1pt solid #d4dae3;
+    padding: 6pt 8pt;
+    white-space: pre-wrap;
+}
+table.params {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 4pt;
+    margin-bottom: 8pt;
+}
+table.params th, table.params td {
+    border: 1pt solid #b9c2d0;
+    padding: 4pt 6pt;
+    font-size: 10.5pt;
+    vertical-align: top;
+    text-align: left;
+}
+table.params th {
+    background: #e6ecf5;
+    color: #1f3a5f;
+    font-weight: bold;
+}
+table.params td.col-param { width: 22%; font-family: "Consolas", monospace; }
+table.params td.col-value { width: 22%; font-family: "Consolas", monospace; }
+table.params td.col-unit  { width: 18%; }
+table.params td.col-just  { width: 38%; }
+div.callout {
+    background: #f0f5fb;
+    border-left: 3pt solid #2a4d7a;
+    padding: 6pt 10pt;
+    margin: 6pt 0pt 8pt 0pt;
+}
+div.title-block {
+    border: 1pt solid #c8d2e0;
+    background: #f8fafc;
+    padding: 10pt 12pt;
+    margin-bottom: 18pt;
+}
+.muted { color: #555; font-size: 10pt; }
+</style>
+</head>
+<body lang="EN-US">
+<div class="WordSection1">
+
+<h1>Methods &mdash; NEURON Simulation Scripts</h1>
+<div class="title-block">
+<p><b>Project:</b> CloudvolNeuron_Test &nbsp;|&nbsp; <b>Author:</b> Juan
+&nbsp;|&nbsp; <b>Document date:</b> 17 May 2026</p>
+<p><b>Repository path:</b>
+<span class="code">\\wsl.localhost\ubuntu\home\jd\NeuronProject\CloudvolNeuron_Test</span></p>
+<p class="muted">Technical lab-notebook write-up of the four Python scripts
+used to build and exercise NEURON cable / ball-and-stick models in this
+project. Each section documents purpose, inputs, outputs, internal
+workflow and module dependencies. Numerical parameters are tabulated
+with units and brief justifications.</p>
+</div>
+
+<!-- ============================ INTRO ============================== -->
+<h2>1. Overview</h2>
+<p>The project contains four Python files that, taken together, form a
+small NEURON tutorial pipeline. <span class="code">NeuronDemo.py</span>
+introduces a single-compartment soma; <span class="code">BallStickDemo.py</span>
+extends this to a two-compartment ball-and-stick neuron with Hodgkin&ndash;
+Huxley kinetics; <span class="code">NonIsopotentialCable.py</span>
+explores how a passive cylindrical cable&rsquo;s steady-state response
+varies with stimulus amplitude, diameter, specific membrane resistance and
+axial resistivity, comparing simulated outputs against analytical cable
+theory; and <span class="code">MatplotlibVis.py</span> is a helper class
+that renders any live NEURON morphology in a matplotlib 3D axis and can
+display NEURON&rsquo;s native <span class="code">PlotShape</span> window
+alongside it.</p>
+
+<p>All four scripts target NEURON&rsquo;s modern Python interface
+(<span class="code">from neuron import n</span> and
+<span class="code">neuron.units</span>); the cable script also uses the
+legacy <span class="code">h</span> interface where it is more concise.
+The standard run library (<span class="code">stdrun.hoc</span>) is loaded
+in every script before any
+<span class="code">finitialize</span> / <span class="code">continuerun</span>
+call. All electrical quantities follow NEURON&rsquo;s default conventions:
+voltages in mV, currents in nA, time in ms, lengths in &mu;m, axial
+resistivity in &Omega;&middot;cm, specific membrane resistance in
+&Omega;&middot;cm<sup>2</sup>, specific capacitance in &mu;F/cm<sup>2</sup>,
+and density-mechanism conductances in S/cm<sup>2</sup>.</p>
+
+<h3>1.1 Common environment</h3>
+<p>Every script can be run with the same Python environment. The union of
+required third-party packages is:</p>
+<ul>
+<li><b>neuron</b> (&ge; 8.x; exposes both the <span class="code">h</span>
+    and <span class="code">n</span> interfaces and the
+    <span class="code">neuron.units</span> module).</li>
+<li><b>matplotlib</b> (&ge; 3.x; <span class="code">pyplot</span> and
+    <span class="code">mpl_toolkits.mplot3d</span> for the 3D viewer).</li>
+<li><b>numpy</b> (vector ops, linear regression via
+    <span class="code">polyfit</span>).</li>
+<li><b>scipy</b> (only <span class="code">scipy.optimize.curve_fit</span>
+    is imported in the cable script and is reserved for nonlinear fits).</li>
+<li><b>pandas</b> and <b>plotnine</b> (data-frame plotting alternatives;
+    imported in the tutorial scripts and kept for the optional
+    persistence/visualisation blocks).</li>
+</ul>
+<p>Python standard-library modules used across the scripts:
+<span class="code">csv</span>, <span class="code">json</span>,
+<span class="code">pickle</span>, <span class="code">pprint</span>,
+<span class="code">textwrap</span>, <span class="code">math</span>,
+<span class="code">os</span>, <span class="code">sys</span>,
+<span class="code">typing</span>.</p>
+
+<!-- ====================== NeuronDemo.py ============================ -->
+<h2>2. <span class="code">NeuronDemo.py</span> &mdash; single-compartment soma</h2>
+
+<h3>2.1 Purpose</h3>
+<p>An introductory NEURON walkthrough: build a one-section model whose
+single cylinder represents an isolated soma, drive it with a sustained
+current, integrate the membrane equation for 40&nbsp;ms, and demonstrate
+how the resulting time / voltage trace can be persisted to disk in CSV,
+JSON and pickle formats for later inspection.</p>
+
+<h3>2.2 Inputs and outputs</h3>
+<p><b>Inputs.</b> No external files are read by default. All parameters
+are hard-coded constants set inside the script. When the optional
+persistence/loading blocks are enabled, the script reads/writes the
+sibling files <span class="code">data.csv</span>,
+<span class="code">data.json</span> and
+<span class="code">data.p</span>.</p>
+
+<p><b>Outputs.</b> The script prints to stdout the NEURON version, the
+pretty-printed <span class="code">soma.psection()</span> dictionary, and
+the soma length / diameter as confirmation. When the matplotlib block is
+enabled, an interactive figure of <i>v(t)</i> at
+<span class="code">soma(0.5)</span> is shown. The optional persistence
+block produces the following file formats:</p>
+<ul>
+<li><span class="code">data.csv</span> &mdash; two columns,
+    <span class="code">t&nbsp;(ms)</span> and
+    <span class="code">v&nbsp;(mV)</span>, no header.</li>
+<li><span class="code">data.json</span> &mdash; a dictionary
+    <span class="code">{"t":[&hellip;], "v":[&hellip;]}</span> with
+    <span class="code">indent=4</span>.</li>
+<li><span class="code">data.p</span> &mdash; a binary pickle of
+    <span class="code">{"t": Vector, "v": Vector}</span>, which preserves
+    the NEURON <span class="code">Vector</span> type on reload.</li>
+</ul>
+
+<h3>2.3 How the script works</h3>
+<ol>
+<li>Imports NEURON together with the unit constants
+    <span class="code">ms</span>, <span class="code">mV</span>,
+    <span class="code">um</span>.</li>
+<li>Builds a single section <span class="code">soma</span> with
+    <span class="code">L = diam = 20&nbsp;&mu;m</span> and prints its
+    full <span class="code">psection()</span> dictionary.</li>
+<li>Creates an <span class="code">IClamp</span> point process at
+    <span class="code">soma(0.5)</span> with a 15&nbsp;ms / 0.9&nbsp;nA
+    pulse starting at <i>t</i>=0.</li>
+<li>Records <span class="code">soma(0.5).v</span> and the global
+    simulation time into two NEURON
+    <span class="code">Vector</span>s.</li>
+<li>Loads <span class="code">stdrun.hoc</span>, initialises at
+    &minus;65&nbsp;mV and integrates to 40&nbsp;ms.</li>
+<li>Optionally serialises the recorded trace via CSV / JSON / pickle.</li>
+</ol>
+
+<h3>2.4 Parameter table</h3>
+<table class="params">
+<thead><tr><th>Parameter</th><th>Value</th><th>Units</th><th>Justification</th></tr></thead>
+<tbody>
+<tr><td class="col-param">soma.L</td><td class="col-value">20</td><td class="col-unit">&mu;m</td><td class="col-just">Length-equals-diameter cylinder approximating a small spherical soma; standard NEURON tutorial value.</td></tr>
+<tr><td class="col-param">soma.diam</td><td class="col-value">20</td><td class="col-unit">&mu;m</td><td class="col-just">Surface area &asymp;1257&nbsp;&mu;m<sup>2</sup> &mdash; sufficient for an illustrative spike.</td></tr>
+<tr><td class="col-param">iclamp.delay</td><td class="col-value">0</td><td class="col-unit">ms</td><td class="col-just">Pulse begins at the start of the simulation so the entire response is captured.</td></tr>
+<tr><td class="col-param">iclamp.dur</td><td class="col-value">15</td><td class="col-unit">ms</td><td class="col-just">Long enough to elicit a clearly visible deflection given the model time-scale (40&nbsp;ms).</td></tr>
+<tr><td class="col-param">iclamp.amp</td><td class="col-value">0.9</td><td class="col-unit">nA</td><td class="col-just">Deliberately large drive so the passive soma reaches a substantial depolarisation in 15&nbsp;ms.</td></tr>
+<tr><td class="col-param">finitialize</td><td class="col-value">&minus;65</td><td class="col-unit">mV</td><td class="col-just">Canonical resting potential used throughout the tutorial scripts.</td></tr>
+<tr><td class="col-param">continuerun</td><td class="col-value">40</td><td class="col-unit">ms</td><td class="col-just">Captures both the depolarising pulse and ~25&nbsp;ms of relaxation after pulse offset.</td></tr>
+</tbody>
+</table>
+
+<h3>2.5 Required modules</h3>
+<p><span class="code">neuron</span> (with <span class="code">h</span>,
+<span class="code">n</span> and <span class="code">neuron.units</span>),
+<span class="code">matplotlib</span>, <span class="code">numpy</span>,
+<span class="code">pandas</span>, <span class="code">plotnine</span>,
+plus standard-library <span class="code">csv</span>,
+<span class="code">json</span>, <span class="code">pickle</span>,
+<span class="code">pprint</span>, <span class="code">textwrap</span>,
+<span class="code">math</span>.</p>
+
+<!-- ====================== BallStickDemo.py ========================= -->
+<h2>3. <span class="code">BallStickDemo.py</span> &mdash; two-compartment ball-and-stick neuron</h2>
+
+<h3>3.1 Purpose</h3>
+<p>Construct a minimal ball-and-stick neuron consisting of a soma
+(&ldquo;ball&rdquo;) and a passive dendrite (&ldquo;stick&rdquo;), inject
+a brief current pulse at the dendritic tip, and observe how the
+resulting voltage transient propagates back to the soma. The script then
+sweeps the stimulus amplitude and the dendritic spatial discretisation
+(<span class="code">nseg</span>) to illustrate how spatial resolution
+influences the simulated trace; this is the
+<i>nseg-convergence</i> exercise from the official NEURON Python
+tutorial.</p>
+
+<h3>3.2 Inputs and outputs</h3>
+<p><b>Inputs.</b> None on disk. All parameters live in the script.</p>
+<p><b>Outputs.</b> Console: NEURON version, unit string for
+<span class="code">gnabar_hh</span>, and the list of density mechanisms
+attached to every section, followed by a per-amplitude progress message
+during the sweep. Graphics: a single matplotlib figure showing soma
+(solid) and dendrite (dashed) voltage traces for each of the four
+stimulus amplitudes overlaid for
+<span class="code">nseg = 1</span> (thick) and
+<span class="code">nseg = 101</span> (thin). No data files are written
+by default.</p>
+
+<h3>3.3 How the script works</h3>
+<ol>
+<li>Imports NEURON, matplotlib and <span class="code">neuron.gui</span>
+    so that NEURON&rsquo;s native graphical primitives are registered (the
+    interactive shape window is currently disabled because it does not
+    behave reliably under WSL).</li>
+<li>Loads <span class="code">stdrun.hoc</span>.</li>
+<li>Defines a <span class="code">BallAndStick</span> class with two
+    builder methods:
+    <ul>
+    <li><span class="code">setup_morphology()</span> creates the soma and
+        dendrite, connects <span class="code">dend(0)</span> to
+        <span class="code">soma(1)</span> and stores
+        <span class="code">soma.wholetree()</span> in
+        <span class="code">self.all</span> for later iteration.</li>
+    <li><span class="code">setup_biophysics()</span> sets axial resistivity
+        and specific capacitance on every section, inserts the
+        Hodgkin&ndash;Huxley mechanism (<span class="code">hh</span>) in
+        the soma with the classic squid-axon densities, and inserts the
+        passive mechanism (<span class="code">pas</span>) in the dendrite
+        with leak conductance 10<sup>&minus;3</sup>&nbsp;S/cm<sup>2</sup>
+        and reversal &minus;65&nbsp;mV.</li>
+    </ul></li>
+<li>Instantiates one cell (<span class="code">my_cell</span>) and attaches
+    an <span class="code">IClamp</span> at the distal end of the
+    dendrite (<span class="code">dend(1)</span>).</li>
+<li>Records voltage at the centres of soma and dendrite, plus global
+    time, into NEURON Vectors.</li>
+<li>Runs a baseline simulation (<span class="code">finitialize(&minus;65 mV)</span>
+    &rarr; <span class="code">continuerun(25 ms)</span>) followed by a
+    nested loop over four amplitudes and two
+    <span class="code">nseg</span> values; for each (amp, nseg) the cell
+    is re-initialised, integrated, and the resulting curves are
+    appended to the matplotlib axes.</li>
+</ol>
+
+<h3>3.4 Parameter table</h3>
+<table class="params">
+<thead><tr><th>Parameter</th><th>Value</th><th>Units</th><th>Justification</th></tr></thead>
+<tbody>
+<tr><td class="col-param">soma.L</td><td class="col-value">12.6157</td><td class="col-unit">&mu;m</td><td class="col-just">Chosen so that &pi;&middot;d&middot;L &asymp; 500&nbsp;&mu;m<sup>2</sup>, matching a spherical soma of the same diameter (valid for electrical-only modelling).</td></tr>
+<tr><td class="col-param">soma.diam</td><td class="col-value">12.6157</td><td class="col-unit">&mu;m</td><td class="col-just">See above. L = diam keeps the soma roughly isopotential at default discretisation.</td></tr>
+<tr><td class="col-param">dend.L</td><td class="col-value">200</td><td class="col-unit">&mu;m</td><td class="col-just">Comparable to a few space constants of the passive dendrite so attenuation toward the tip is visible.</td></tr>
+<tr><td class="col-param">dend.diam</td><td class="col-value">1</td><td class="col-unit">&mu;m</td><td class="col-just">Representative of a thin distal dendritic shaft.</td></tr>
+<tr><td class="col-param">Ra</td><td class="col-value">100</td><td class="col-unit">&Omega;&middot;cm</td><td class="col-just">Mid-range mammalian cytoplasmic resistivity (literature 70&ndash;200).</td></tr>
+<tr><td class="col-param">cm</td><td class="col-value">1</td><td class="col-unit">&mu;F/cm<sup>2</sup></td><td class="col-just">Canonical specific membrane capacitance for biological lipid bilayers.</td></tr>
+<tr><td class="col-param">hh.gnabar</td><td class="col-value">0.12</td><td class="col-unit">S/cm<sup>2</sup></td><td class="col-just">Hodgkin&ndash;Huxley (1952) squid axon default.</td></tr>
+<tr><td class="col-param">hh.gkbar</td><td class="col-value">0.036</td><td class="col-unit">S/cm<sup>2</sup></td><td class="col-just">Hodgkin&ndash;Huxley default.</td></tr>
+<tr><td class="col-param">hh.gl</td><td class="col-value">3&times;10<sup>&minus;4</sup></td><td class="col-unit">S/cm<sup>2</sup></td><td class="col-just">Hodgkin&ndash;Huxley default leak.</td></tr>
+<tr><td class="col-param">hh.el</td><td class="col-value">&minus;54.3</td><td class="col-unit">mV</td><td class="col-just">Hodgkin&ndash;Huxley default leak reversal.</td></tr>
+<tr><td class="col-param">pas.g</td><td class="col-value">10<sup>&minus;3</sup></td><td class="col-unit">S/cm<sup>2</sup></td><td class="col-just">Rm = 1000&nbsp;&Omega;&middot;cm<sup>2</sup>, a typical passive value.</td></tr>
+<tr><td class="col-param">pas.e</td><td class="col-value">&minus;65</td><td class="col-unit">mV</td><td class="col-just">Matches the chosen resting potential so the dendrite starts at zero passive current.</td></tr>
+<tr><td class="col-param">stim.delay</td><td class="col-value">5</td><td class="col-unit">ms</td><td class="col-just">Allows a 5&nbsp;ms baseline before the pulse.</td></tr>
+<tr><td class="col-param">stim.dur</td><td class="col-value">1</td><td class="col-unit">ms</td><td class="col-just">Brief pulse to elicit a single transient response without re-stimulating.</td></tr>
+<tr><td class="col-param">stim.amp</td><td class="col-value">{0.075, 0.150, 0.225, 0.300}</td><td class="col-unit">nA</td><td class="col-just">Spans a 4&times; range, large enough to drive HH spiking at the higher amplitudes.</td></tr>
+<tr><td class="col-param">dend.nseg</td><td class="col-value">{1, 101}</td><td class="col-unit">&mdash;</td><td class="col-just">Compares the default coarse discretisation against a clearly converged one. nseg is kept odd so the recording point at x = 0.5 lies inside a segment, not on a boundary.</td></tr>
+<tr><td class="col-param">continuerun</td><td class="col-value">25</td><td class="col-unit">ms</td><td class="col-just">Covers the 5&nbsp;ms pre-pulse baseline, the 1&nbsp;ms pulse and ~19&nbsp;ms of post-pulse dynamics.</td></tr>
+</tbody>
+</table>
+
+<h3>3.5 Required modules</h3>
+<p><span class="code">neuron</span> (with <span class="code">n</span>,
+<span class="code">neuron.gui</span> and <span class="code">neuron.units</span>),
+<span class="code">matplotlib</span>, plus standard-library
+<span class="code">os</span> and <span class="code">sys</span>. The
+helper class <span class="code">NeuronMatplotlibVisualizer</span>
+defined in <span class="code">MatplotlibVis.py</span> can be enabled by
+uncommenting the corresponding import line; this is optional.</p>
+
+<!-- =================== NonIsopotentialCable.py ===================== -->
+<h2>4. <span class="code">NonIsopotentialCable.py</span> &mdash; passive cable parameter study</h2>
+
+<h3>4.1 Purpose</h3>
+<p>Numerically verify the predictions of <i>passive cable theory</i> for
+a finite, non-isopotential cylindrical cable. The script performs four
+parameter sweeps &mdash; on stimulus amplitude <i>I</i>, cable diameter
+<i>d</i>, specific membrane resistance <i>R<sub>m</sub></i> and axial
+resistivity <i>R<sub>a</sub></i> &mdash; and compares the peak voltage
+deflection at the injection site and at the distal end of the cable
+against the analytical expressions for the space constant and the
+input resistance.</p>
+
+<div class="callout">
+<p><b>Key analytical relations (infinite cable):</b></p>
+<p>&lambda; = &radic;(<i>R<sub>m</sub>&middot;d</i> / (4&middot;<i>R<sub>a</sub></i>))
+&nbsp;&nbsp;&nbsp;&nbsp;
+<i>R</i><sub>in</sub> = &radic;(<i>R<sub>m</sub>&middot;R<sub>a</sub></i> /
+(&pi;&middot;<i>d</i>))</p>
+<p>So &lambda; &prop; &radic;<i>d</i>, &lambda; &prop; &radic;<i>R<sub>m</sub></i>,
+&lambda; &prop; 1/&radic;<i>R<sub>a</sub></i>; and
+<i>R</i><sub>in</sub> &prop; 1/&radic;<i>d</i>,
+<i>R</i><sub>in</sub> &prop; &radic;<i>R<sub>m</sub></i>,
+<i>R</i><sub>in</sub> &prop; &radic;<i>R<sub>a</sub></i>.</p>
+</div>
+
+<h3>4.2 Inputs and outputs</h3>
+<p><b>Inputs.</b> None on disk. Hard-coded baseline cable parameters
+(modified per sweep, see table below).</p>
+<p><b>Outputs.</b> Console: NEURON banner, default-parameter echo, and
+for every sweep step the (&lambda;, <i>R</i><sub>in</sub>) prediction
+together with the simulated peak deflections
+&Delta;<i>V</i><sub>center</sub> and &Delta;<i>V</i><sub>end</sub>;
+each sweep finishes with the fitted regression slope. Graphics: four
+2&times;3 matplotlib figures (one per sweep) containing voltage traces
+at centre and end, a visualisation of the swept parameter or the
+&lambda; relationship, and the &Delta;<i>V</i> linearisation overlaid
+with theoretical and least-squares fits.</p>
+
+<h3>4.3 How the script works</h3>
+<ol>
+<li>Builds a single passive cable section
+    (<span class="code">h.Section(name="cable")</span>) with default
+    parameters (table below).</li>
+<li>Attaches an <span class="code">IClamp</span> at the geometrical
+    centre of the cable.</li>
+<li>Defines two helper functions:
+    <span class="code">calculate_lambda(d, Rm, Ra)</span> and
+    <span class="code">calculate_Rin_cable(d, Rm, Ra)</span>, both of
+    which perform the unit conversion &mu;m&nbsp;&harr;&nbsp;cm
+    internally.</li>
+<li>Iterates four sweeps. For each step a cable property is updated, two
+    recording <span class="code">Vector</span>s are bound to
+    <span class="code">cable(0.5).v</span> and
+    <span class="code">cable(1.0).v</span>, the model is initialised at
+    <i>v</i><sub>rest</sub> = &minus;70&nbsp;mV and integrated to
+    25&nbsp;ms, the peak deflections are appended, and the corresponding
+    subplot is updated.</li>
+<li>Linear regressions (<span class="code">numpy.polyfit</span>) and a
+    theoretical line are overlaid in the appropriate column-3 subplot;
+    R<sup>2</sup> is annotated for Section&nbsp;1. The first three
+    sweeps call <span class="code">plt.show(block=False)</span> so
+    figures stack; the final sweep ends with a blocking
+    <span class="code">plt.show()</span>.</li>
+</ol>
+
+<h3>4.4 Baseline cable parameters</h3>
+<table class="params">
+<thead><tr><th>Parameter</th><th>Value</th><th>Units</th><th>Justification</th></tr></thead>
+<tbody>
+<tr><td class="col-param">cable.L</td><td class="col-value">1000</td><td class="col-unit">&mu;m</td><td class="col-just">Long compared to &lambda; (&asymp;160&nbsp;&mu;m for the default cable), so the finite-cable correction to <i>R</i><sub>in</sub> is small.</td></tr>
+<tr><td class="col-param">cable.diam</td><td class="col-value">1</td><td class="col-unit">&mu;m</td><td class="col-just">Thin baseline; varied to 2, 4, 8&nbsp;&mu;m in Section&nbsp;2.</td></tr>
+<tr><td class="col-param">cable.cm</td><td class="col-value">1.0</td><td class="col-unit">&mu;F/cm<sup>2</sup></td><td class="col-just">Canonical biological value.</td></tr>
+<tr><td class="col-param">pas.g</td><td class="col-value">10<sup>&minus;3</sup></td><td class="col-unit">S/cm<sup>2</sup></td><td class="col-just">R<sub>m</sub> = 1000&nbsp;&Omega;&middot;cm<sup>2</sup>; varied in Section&nbsp;3.</td></tr>
+<tr><td class="col-param">pas.e</td><td class="col-value">&minus;70</td><td class="col-unit">mV</td><td class="col-just">Equal to v<sub>rest</sub> so passive current is zero at rest.</td></tr>
+<tr><td class="col-param">cable.Ra</td><td class="col-value">100</td><td class="col-unit">&Omega;&middot;cm</td><td class="col-just">Mid-range mammalian value; varied in Section&nbsp;4.</td></tr>
+<tr><td class="col-param">v<sub>rest</sub></td><td class="col-value">&minus;70</td><td class="col-unit">mV</td><td class="col-just">Passive initial condition.</td></tr>
+<tr><td class="col-param">iclamp.delay</td><td class="col-value">0</td><td class="col-unit">ms</td><td class="col-just">Pulse begins at <i>t</i> = 0.</td></tr>
+<tr><td class="col-param">iclamp.dur</td><td class="col-value">15</td><td class="col-unit">ms</td><td class="col-just">Long enough that the membrane reaches near-steady-state (15&nbsp;ms &raquo; &tau;<sub>m</sub> = R<sub>m</sub>&middot;c<sub>m</sub> = 1&nbsp;ms).</td></tr>
+<tr><td class="col-param">iclamp.amp</td><td class="col-value">0.1</td><td class="col-unit">nA</td><td class="col-just">Small enough to stay safely in the linear (passive) regime.</td></tr>
+<tr><td class="col-param">continuerun</td><td class="col-value">25</td><td class="col-unit">ms</td><td class="col-just">Captures the 15&nbsp;ms pulse plus ~10&nbsp;ms of relaxation.</td></tr>
+</tbody>
+</table>
+
+<h3>4.5 Sweep specifications</h3>
+<table class="params">
+<thead><tr><th>Section</th><th>Swept parameter</th><th>Values</th><th>Theoretical scaling</th></tr></thead>
+<tbody>
+<tr><td>1</td><td class="col-param">iclamp.amp</td><td class="col-value">0.075, 0.150, 0.225, 0.300&nbsp;nA</td><td>&Delta;V &prop; <i>I</i> (Ohmic, linear).</td></tr>
+<tr><td>2</td><td class="col-param">cable.diam</td><td class="col-value">1, 2, 4, 8&nbsp;&mu;m</td><td>&lambda; &prop; &radic;<i>d</i>, &nbsp;&Delta;V &prop; 1/&radic;<i>d</i>.</td></tr>
+<tr><td>3</td><td class="col-param">pas.g (Rm)</td><td class="col-value">Rm = 500, 1000, 2000, 4000&nbsp;&Omega;&middot;cm<sup>2</sup></td><td>&lambda; &prop; &radic;<i>R<sub>m</sub></i>, &nbsp;&Delta;V &prop; &radic;<i>R<sub>m</sub></i>.</td></tr>
+<tr><td>4</td><td class="col-param">cable.Ra</td><td class="col-value">50, 100, 200, 400&nbsp;&Omega;&middot;cm</td><td>&lambda; &prop; 1/&radic;<i>R<sub>a</sub></i>, &nbsp;&Delta;V &prop; &radic;<i>R<sub>a</sub></i>.</td></tr>
+</tbody>
+</table>
+
+<h3>4.6 Required modules</h3>
+<p><span class="code">neuron</span> (with both
+<span class="code">h</span> and <span class="code">n</span> interfaces
+and <span class="code">neuron.units</span>),
+<span class="code">numpy</span>,
+<span class="code">scipy.optimize</span> (reserved for future nonlinear
+fits), <span class="code">matplotlib</span>,
+<span class="code">pandas</span>, <span class="code">plotnine</span>,
+plus standard-library <span class="code">csv</span>,
+<span class="code">math</span>, <span class="code">pprint</span>,
+<span class="code">textwrap</span>.</p>
+
+<!-- ====================== MatplotlibVis.py ========================= -->
+<h2>5. <span class="code">MatplotlibVis.py</span> &mdash; 3D morphology viewer</h2>
+
+<h3>5.1 Purpose</h3>
+<p>Provide a small, reusable helper class
+(<span class="code">NeuronMatplotlibVisualizer</span>) that renders any
+live NEURON model&rsquo;s morphology in a matplotlib 3D axis. The class
+can also drive NEURON&rsquo;s native
+<span class="code">PlotShape</span> window so both GUIs appear together.
+This is convenient when working under WSL or other environments where
+the native window alone is awkward.</p>
+
+<h3>5.2 Inputs and outputs</h3>
+<p><b>Inputs.</b> A live NEURON model in the same Python process (the
+class iterates over <span class="code">n.allsec()</span> at draw time);
+optionally a NEURON <span class="code">PlotShape</span> instance to
+display alongside the matplotlib view.</p>
+<p><b>Outputs.</b> A <span class="code">matplotlib.figure.Figure</span>
+returned by <span class="code">plot()</span>; an interactive 3D
+matplotlib window when <span class="code">show=True</span>; and (when
+<span class="code">save_path</span> is given) a 150&nbsp;dpi image file
+&mdash; PNG by default but determined by the supplied filename
+extension.</p>
+
+<h3>5.3 How the class works</h3>
+<ol>
+<li><span class="code">_read_section_points(sec)</span> returns four
+    parallel lists of 3D coordinates and diameters for one section.
+    It prefers the section&rsquo;s explicit
+    <span class="code">n3d()</span> point list and falls back to
+    <span class="code">psection()["morphology"]["pt3d"]</span>; if
+    neither exists the section is silently skipped.</li>
+<li><span class="code">plot(save_path, show, ps)</span> calls
+    <span class="code">n.define_shape()</span> so any sections that
+    were specified only by L and diam acquire a default 3D point
+    list, then iterates over <span class="code">n.allsec()</span> and
+    draws each segment as a line whose width scales with local
+    diameter; a scatter marker is added at every 3D point.</li>
+<li><span class="code">wrap_show()</span> /
+    <span class="code">wrap_and_show()</span> store a reference to a
+    NEURON <span class="code">PlotShape</span> so that a subsequent
+    <span class="code">show_both()</span> call can open it alongside
+    the matplotlib figure. The two-stage interface is required because
+    NEURON&rsquo;s <span class="code">PlotShape</span> objects do not
+    accept user-defined attributes.</li>
+<li><span class="code">show_both()</span> opens the stored NEURON window
+    and re-draws the matplotlib view, catching exceptions from either
+    GUI so the call cannot leave the user with half a view.</li>
+</ol>
+
+<h3>5.4 Parameter table</h3>
+<table class="params">
+<thead><tr><th>Parameter</th><th>Value</th><th>Units</th><th>Justification</th></tr></thead>
+<tbody>
+<tr><td class="col-param">scale_lw</td><td class="col-value">0.05</td><td class="col-unit">multiplier on &mu;m</td><td class="col-just">Converts local diameter to matplotlib line width; keeps thick somata legible without dominating the axes.</td></tr>
+<tr><td class="col-param">scatter_scale</td><td class="col-value">0.5</td><td class="col-unit">multiplier on &mu;m</td><td class="col-just">Marker area = (d &middot; scatter_scale)<sup>2</sup>; chosen empirically to be visible without overlapping for typical cell sizes.</td></tr>
+<tr><td class="col-param">figsize</td><td class="col-value">(7, 6)</td><td class="col-unit">inches</td><td class="col-just">Square-ish figure that fits comfortably on standard laptop displays.</td></tr>
+<tr><td class="col-param">savefig dpi</td><td class="col-value">150</td><td class="col-unit">dots / inch</td><td class="col-just">Print-quality default while keeping file size modest.</td></tr>
+</tbody>
+</table>
+
+<h3>5.5 Required modules</h3>
+<p><span class="code">neuron</span> (imported lazily inside
+<span class="code">plot</span> and
+<span class="code">apply_to_plotshape</span>),
+<span class="code">matplotlib</span> with
+<span class="code">mpl_toolkits.mplot3d</span>,
+<span class="code">numpy</span>, plus standard-library
+<span class="code">typing</span>.</p>
+
+<!-- ====================== Reproduction notes ======================= -->
+<h2>6. Reproduction notes</h2>
+<p>To reproduce any single figure from scratch, run the corresponding
+script from the project root with the project&rsquo;s Python
+environment:</p>
+<pre>cd ~/NeuronProject/CloudvolNeuron_Test
+python NeuronDemo.py
+python BallStickDemo.py
+python NonIsopotentialCable.py</pre>
+<p>The scripts do not depend on each other except that
+<span class="code">BallStickDemo.py</span> can optionally import
+<span class="code">NeuronMatplotlibVisualizer</span> from
+<span class="code">MatplotlibVis.py</span>. All four files use the same
+NEURON installation and the same Python environment.</p>
+
+<h2>7. Output artefacts present in the project folder</h2>
+<table class="params">
+<thead><tr><th>File</th><th>Producer</th><th>Format</th><th>Contents</th></tr></thead>
+<tbody>
+<tr><td class="col-param">data.csv</td><td>NeuronDemo.py (optional)</td><td>CSV, no header</td><td>Time / voltage pairs at <span class="code">soma(0.5)</span>.</td></tr>
+<tr><td class="col-param">data.p</td><td>NeuronDemo.py (optional)</td><td>pickle, binary</td><td>Dict with NEURON Vectors for t and v.</td></tr>
+<tr><td class="col-param">output.txt</td><td>NeuronDemo.py</td><td>Plain text</td><td>Pretty-printed <span class="code">soma.psection()</span> dictionary.</td></tr>
+<tr><td class="col-param">plot.png</td><td>NeuronDemo.py</td><td>PNG</td><td>v(t) trace at <span class="code">soma(0.5)</span>.</td></tr>
+<tr><td class="col-param">neuron_shape_3d.png</td><td>MatplotlibVis.py</td><td>PNG</td><td>3D morphology rendering (per <span class="code">save_path</span>).</td></tr>
+<tr><td class="col-param">test_neuron_shape_3d.png</td><td>MatplotlibVis.py</td><td>PNG</td><td>Backup / test rendering of the same view.</td></tr>
+</tbody>
+</table>
+
+<p class="muted" style="margin-top:18pt;">End of methods document.</p>
+</div>
+</body>
+</html>
