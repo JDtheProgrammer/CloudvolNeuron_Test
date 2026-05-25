@@ -37,10 +37,10 @@ except ImportError:
 h.load_file('import3d.hoc')
 
 # code to source only 1 SWC file.
-'''swc_path = '/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/76182.swc'  # adjust!
+'''swc_path = '/home/jd/NeuronProject/CloudvolNeuron_Test/76182.swc'  # adjust!
 print("File exists?", os.path.exists(swc_path))'''
 
-swc_folder = '/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/SWC_files/'
+swc_folder = '/home/jd/NeuronProject/CloudvolNeuron_Test/SWC_files/'
 swc_files = [os.path.join(swc_folder, f) for f in os.listdir(swc_folder) if f.endswith('.swc')] #.join concatenates one or more paths. for f in os.listdir(swc_folder) iterates through all files in the specified folder, and if f.endswith('.swc') checks if the file has a .swc extension. If it does, the full path to the file is created by joining the folder path and the file name, and this path is added to the swc_files list. This results in a list of full paths to all SWC files in the specified folder.
 
 print()

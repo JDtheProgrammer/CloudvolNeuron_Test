@@ -1,72 +1,3 @@
-# ===================================================================================================
-# NEURON + SWC PIPELINE (SEGMENT-LEVEL ANALYSIS) — MORPHOLOGY GRADIENT + VOLTAGE TRACES
-# ---------------------------------------------------------------------------------------------------
-# ===================================================================================================
-# NEURON + SWC PIPELINE (SEGMENT-LEVEL ANALYSIS) — MORPHOLOGY GRADIENT + VOLTAGE TRACES
-# ===================================================================================================
-# FIX SUMMARY (all fixes marked with # FIX: inline)
-#
-#  1. STEP 9 — clust1/clust2/k1/k2 used before assignment
-#              cluster_segments_by_trace_similarity() was defined but never called before the
-#              reorder_clusters_by_similarity_to_stim() calls that consume its output.
-#
-#  2. STEP 9 — plot_ttm_fwhm_scatter redefined (duplicate function)
-#              The function was defined identically in Step 8d AND again at the top of Step 9.
-#              The second definition silently overwrote the first; removed the duplicate.
-#
-#  3. STEP 9 — filter_segments_by_shape redefined (duplicate function)
-#              Same problem as above; duplicate definition removed.
-#
-#  4. STEP 10 — print_cluster_table redefined (duplicate function)
-#               Identical function body defined in Step 9 AND Step 10; removed the Step 10 copy.
-#
-#  5. STEP 12 — plot_voltage redefined (duplicate function)
-#               Defined in Step 9 and again in Step 12; removed the Step 12 copy.
-#
-#  6. STEP 13 — plot_cluster_similarity_distance_panel redefined (duplicate function)
-#               Defined in Step 9 and again in Step 13; removed the Step 13 copy.
-#
-#  7. STEP 11 — node_to_segment rebuilt from scratch, discarding the version already built
-#               in build_node_to_segment_map(). The second loop is extremely slow (O(N²))
-#               and overwrites the correct result. Removed the redundant rebuild; the existing
-#               node_to_segment dict is reused directly.
-#
-#  8. STEP 9 (JSON export, first copy) — incomplete line
-#               "cluster": {k: int(clust1.get(k, -1)) for k in all_segment_keys},
-#               followed immediately by a new key on the same logical line — syntax error
-#               caused by a missing closing brace on the "1ms" sub-dict. Fixed indentation
-#               and added the missing closing brace.
-#
-#  9. STEP 13 (second JSON export) — same incomplete-line syntax error repeated. Fixed.
-#
-# 10. NM_TO_UM constant redefined inside the SWC-parsing loop
-#     NM_TO_UM = 1000.0 was defined at module level AND redefined inside the per-line loop,
-#     which is harmless but confusing. Removed the inner redefinition.
-#
-# 11. plot_current_waveform — xlim set inside the function AND overridden outside
-#     The function sets ax.set_xlim(0, t_s[-1]) and the caller immediately overrides it.
-#     The internal set_xlim is not wrong but the comment implied it should match the voltage
-#     panel; left the external overrides in place (they are intentional) and removed the
-#     redundant internal one to avoid confusion.
-#
-# 12. plot_branch_correlation_dotplot — dead second set_xlabel overwrites the first
-#     ax.set_xlabel("Branch depth from root") is immediately overwritten by
-#     ax.set_xlabel("Branch level"). Removed the first (dead) call.
-#
-# 13. Step 1 — nseg loop placed BEFORE SWC file is parsed
-#     The loop that calls sec.n3d() to fix nseg appears in the source before the
-#     `with open(swc_path)` block that populates `nodes`. The nseg loop does not
-#     need nodes, so it technically runs correctly, but the ordering is misleading
-#     and the comment references node counts that don't exist yet. Reordered so
-#     SWC parsing comes first, then nseg fixing.
-#
-# 14. Step 8d — redundant plt.show() / plt.savefig() for TTM/FWHM scatter
-#     The exact same figure (fig_feat) is created, saved, and shown in Step 8d,
-#     then recreated identically at the start of Step 9 Part A. The Step 8d block
-#     was the earlier duplicate; removed it so the figure is only produced once
-#     (in Step 9 Part A where it belongs with the rest of the Step 9 analysis).
-# ===================================================================================================
-
 # =========================
 # Imports
 # =========================
@@ -2153,10 +2084,10 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
     # Draw the stimulated segment as a black star
     if stim_key in v_dict:
         r_stim = corr_values.get(stim_key, 1.0)
-        lvl_s  = seg_key_to_level.get(stim_key, 1)
+        lvl_s  = seg_key_to_branch_level.get(stim_key, 1)
 
         # Place stim star using the same local distance ruler logic
-        keys_lvl = [k for k in keys_present if seg_key_to_level.get(k, 1) == lvl_s]
+        keys_lvl = [k for k in keys_present if seg_key_to_branch_level.get(k, 1) == lvl_s]
         dvals = np.array([segment_distance_from_stim.get(k, np.nan) for k in keys_lvl], dtype=float)
         dvals = dvals[np.isfinite(dvals)]
         dmax = float(np.max(dvals)) if len(dvals) else 1.0
@@ -2265,9 +2196,6 @@ print(f"λ (1 ms stimulus) = {lambda_1ms:.2f} µm")
 print(f"λ (1 s stimulus)  = {lambda_1s:.2f} µm")
 print("================================================\n")
 
-
-# ---- EXISTING CODE (DO NOT REMOVE) ----
-fig_b, axes_b = plt.subplots(2, 1, figsize=FIG_BRANCH)
 
 # Plot the 1 ms branch-order panel.
 # Title no longer shows k because k refers to KMeans clusters, not branch order.
