@@ -1,13 +1,7 @@
 """
-SWC_files_sin.py — NEURON/SWC analysis pipeline
+Make Sure to check the Symposium Poster PDF in JD's downloads folder for visual examples of the intended output 
+of this code.
 
-Commenting style in this version:
-- Section headers explain where each stage begins.
-- Block comments explain the reasoning, assumptions, and data transformations.
-- Inline comments are kept only where a variable choice or operation is easy to misunderstand.
-
-The code behavior is intentionally unchanged from the previous commented version; only the
-comment density and wording were reworked for readability.
 """
 
 # =========================
@@ -100,7 +94,7 @@ h.load_file("stdrun.hoc")
 h.load_file("import3d.hoc")
 
 # Load SWC file
-swc_path = '/home/jd/NeuronProject/CloudvolNeuron_Test/SWC_files/76182_reRoot_reSample_5000.swc'
+swc_path = '/home/aksay_lab/NeuronProject/CloudvolNeuron_Test/SWC_files/76182_reRoot_reSample_5000.swc'
 
 print("File exists?", os.path.exists(swc_path))
 print("Loading SWC file:", swc_path)
@@ -712,8 +706,8 @@ all_segment_keys = soma_segment_keys + non_soma_segment_keys
 
 def compute_peak_ratio(v_dict, reference_key, all_keys, t, t_start=100.0, t_end=300.0):
     mask     = (t >= t_start) & (t <= t_end)
-    ref_full = v_dict[reference_key]
-    # Compute the mean used as a baseline or summary value.
+    ref_full = v_dict[reference_key] # v_dict stands for voltage dictionary: this line retrieves the full voltage trace for the reference segment.
+    # Compute the maximum used for peak detection or normalization.
     ref_base = np.mean(ref_full[t < t_start])
     # Compute the maximum used for peak detection or normalization.
     ref_peak = np.max(ref_full[mask] - ref_base)
@@ -724,13 +718,11 @@ def compute_peak_ratio(v_dict, reference_key, all_keys, t, t_start=100.0, t_end=
             ratio_values[key] = 0.0
             continue
         x_full = v_dict[key]
-        # Compute the mean used as a baseline or summary value.
         x_base = np.mean(x_full[t < t_start])
-        # Compute the maximum used for peak detection or normalization.
         x_peak = np.max(x_full[mask] - x_base)
+
         # Restrict the ratio to the valid 0-to-1 range.
         ratio_values[key] = float(np.clip(x_peak / ref_peak, 0.0, 1.0))
-    # Return the final value(s) produced by this helper function.
     return ratio_values
 
 
@@ -772,11 +764,9 @@ def compute_time_to_max_and_fwhm(v_dict, all_keys, t, t_start=100.0, t_end=300.0
 
         if len(above) == 0:
             fwhm[key] = np.nan
-        # Use this fallback when the earlier condition is not true.
         else:
             fwhm[key] = float(tt[above[-1]] - tt[above[0]])
 
-    # Return the final value(s) produced by this helper function.
     return time_to_max, fwhm
 
 
@@ -857,16 +847,12 @@ def plot_ttm_fwhm_vs_distance(axes, ttm, fwhm, dist_map, seg_key_to_level,
         dists.append(d);  ttms.append(tm);  fwhms.append(fw)
         orders.append(bo); keys_valid.append(key)
 
-    # Convert data into a NumPy array for vectorized numerical operations.
     dists  = np.array(dists)
-    # Convert data into a NumPy array for vectorized numerical operations.
     ttms   = np.array(ttms)
-    # Convert data into a NumPy array for vectorized numerical operations.
     fwhms  = np.array(fwhms)
-    # Convert data into a NumPy array for vectorized numerical operations.
     orders = np.array(orders)
 
-    # Do nothing here; this placeholder keeps the syntax valid.
+    # "passed" is a boolean array indicating which segments passed the filter based on their keys.
     passed = np.array([k in filtered_keys for k in keys_valid]) \
              if filtered_keys is not None else np.ones(len(keys_valid), dtype=bool)
 
@@ -879,15 +865,11 @@ def plot_ttm_fwhm_vs_distance(axes, ttm, fwhm, dist_map, seg_key_to_level,
     # Draw points marking segment metrics or key anatomical locations.
     sc0 = ax0.scatter(dists, ttms, c=orders, cmap=cmap, norm=norm,
                       s=MS_DOT_DIST, edgecolors='black', linewidths=0.4, alpha=0.85)
-    # Set the panel title so the stimulus/metric being plotted is clear.
     ax0.set_title(f"Time to max vs distance from stim — {run_label}",
                   fontsize=FONT_TITLE, fontweight='bold')
-    # Label the horizontal axis with the correct variable and units.
     ax0.set_xlabel("Distance from stim site (µm)", fontsize=FONT_LABEL)
-    # Label the vertical axis with the correct variable and units.
     ax0.set_ylabel("Time to max (ms)", fontsize=FONT_LABEL)
     ax0.tick_params(labelsize=FONT_TICK)
-    # Add a light grid to make values easier to read from the plot.
     ax0.grid(True, alpha=0.22)
     # Hide unnecessary plot borders for a cleaner figure style.
     ax0.spines['top'].set_visible(False)
@@ -901,22 +883,15 @@ def plot_ttm_fwhm_vs_distance(axes, ttm, fwhm, dist_map, seg_key_to_level,
 
     # ── Row 1: FWHM vs distance ───────────────────────────────────────────────
     ax1 = axes[1]
-    # Draw points marking segment metrics or key anatomical locations.
     sc1 = ax1.scatter(dists, fwhms, c=orders, cmap=cmap, norm=norm,
                       s=MS_DOT_DIST, edgecolors='black', linewidths=0.4, alpha=0.85)
-    # Set the panel title so the stimulus/metric being plotted is clear.
     ax1.set_title(f"FWHM vs distance from stim — {run_label}",
                   fontsize=FONT_TITLE, fontweight='bold')
-    # Label the horizontal axis with the correct variable and units.
     ax1.set_xlabel("Distance from stim site (µm)", fontsize=FONT_LABEL)
-    # Label the vertical axis with the correct variable and units.
     ax1.set_ylabel("FWHM (ms)", fontsize=FONT_LABEL)
     ax1.tick_params(labelsize=FONT_TICK)
-    # Add a light grid to make values easier to read from the plot.
     ax1.grid(True, alpha=0.22)
-    # Hide unnecessary plot borders for a cleaner figure style.
     ax1.spines['top'].set_visible(False)
-    # Hide unnecessary plot borders for a cleaner figure style.
     ax1.spines['right'].set_visible(False)
     # Add a colorbar so the colormap’s numeric meaning is visible.
     cbar1 = plt.colorbar(sc1, ax=ax1, pad=0.02)
@@ -927,12 +902,10 @@ def plot_ttm_fwhm_vs_distance(axes, ttm, fwhm, dist_map, seg_key_to_level,
     # ── Row 2: TTM vs FWHM — filter diagnostic ───────────────────────────────
     ax2 = axes[2]
     if (~passed).any():
-        # Draw points marking segment metrics or key anatomical locations.
         ax2.scatter(ttms[~passed], fwhms[~passed],
                     color='#cccccc', s=MS_DOT_DIST - 10, edgecolors='none',
                     alpha=0.6, label='Filtered out', zorder=2)
     if passed.any():
-        # Draw points marking segment metrics or key anatomical locations.
         sc2 = ax2.scatter(ttms[passed], fwhms[passed],
                           c=orders[passed], cmap=cmap, norm=norm,
                           s=MS_DOT_DIST, edgecolors='black', linewidths=0.4,
@@ -943,37 +916,30 @@ def plot_ttm_fwhm_vs_distance(axes, ttm, fwhm, dist_map, seg_key_to_level,
         cbar2.set_ticks(range(1, max_order + 1))
         cbar2.ax.tick_params(labelsize=FONT_CBAR)
 
+    # Draw a vertical reference line for stimulus timing or filter thresholds.
     if ttm_max is not None:
-        # Draw a vertical reference line for stimulus timing or filter thresholds.
         ax2.axvline(ttm_max, color='steelblue', linestyle='--', lw=2.0,
                     label=f"TTM max = {ttm_max:.0f} ms")
     if fwhm_max is not None:
-        # Draw a horizontal reference line for baseline or filter thresholds.
         ax2.axhline(fwhm_max, color='darkorange', linestyle='--', lw=2.0,
                     label=f"FWHM max = {fwhm_max:.0f} ms")
     if fwhm_min is not None:
-        # Draw a horizontal reference line for baseline or filter thresholds.
         ax2.axhline(fwhm_min, color='darkgreen', linestyle='--', lw=2.0,
                     label=f"FWHM min = {fwhm_min:.0f} ms")
 
-    # Set the panel title so the stimulus/metric being plotted is clear.
     ax2.set_title(f"TTM vs FWHM — filter diagnostic — {run_label}",
                   fontsize=FONT_TITLE, fontweight='bold')
-    # Label the horizontal axis with the correct variable and units.
     ax2.set_xlabel("Time to max (ms)", fontsize=FONT_LABEL)
-    # Label the vertical axis with the correct variable and units.
     ax2.set_ylabel("FWHM (ms)", fontsize=FONT_LABEL)
     ax2.tick_params(labelsize=FONT_TICK)
-    # Add a light grid to make values easier to read from the plot.
     ax2.grid(True, alpha=0.22)
-    # Hide unnecessary plot borders for a cleaner figure style.
     ax2.spines['top'].set_visible(False)
-    # Hide unnecessary plot borders for a cleaner figure style.
     ax2.spines['right'].set_visible(False)
-    # Add a legend so the plotted colors/markers can be interpreted.
     ax2.legend(fontsize=FONT_LEGEND, loc='best')
 
 
+"""This function filters segments based on their TTM and FWHM values, keeping only those that meet specified 
+criteria. Criteria include maximum TTM, maximum FWHM, and minimum FWHM."""
 def filter_segments_by_shape(att_values, ttm, fwhm, all_keys,
                               ttm_max=None, fwhm_max=None, fwhm_min=None):
     """Keep only segments whose peak-shape satisfies TTM/FWHM criteria."""
@@ -992,11 +958,9 @@ def filter_segments_by_shape(att_values, ttm, fwhm, all_keys,
         if fwhm_min is not None and fwhm_val < fwhm_min:
             continue
         filtered_keys.append(key)
-    # Return the final value(s) produced by this helper function.
     return filtered_keys
 
 
-# Compute metrics
 # Compute/store peak-ratio attenuation values for the burst stimulus.
 corr1 = compute_peak_ratio(v_dict=v1, reference_key=stim_key,
                             all_keys=all_segment_keys, t=t1,
@@ -1030,8 +994,8 @@ print(f"Peak ratio computed for {len(corr2)} segments (sustained run)")
 print(f"  Burst     range: [{min(corr1.values()):.3f}, {max(corr1.values()):.3f}]")
 print(f"  Sustained range: [{min(corr2.values()):.3f}, {max(corr2.values()):.3f}]")
 
-# ─── Map every SWC node to its nearest NEURON segment ────────────────────────
 
+# ─── Map every SWC node to its nearest NEURON segment ────────────────────────
 def build_node_to_segment_map():
     """For every SWC node, find the NEURON segment whose 3D position is closest."""
     node_to_seg = {}
@@ -1045,16 +1009,15 @@ def build_node_to_segment_map():
             n3d_n = sec.n3d()
             if n3d_n == 0:
                 continue
-            ta = sec.arc3d(n3d_n - 1)
+            ta = sec.arc3d(n3d_n - 1) #ta stands for total arc length of the section, which is used to normalize the arc lengths of individual segments.
             if ta == 0:
                 continue
-            # Convert data into a NumPy array for vectorized numerical operations.
-            af = np.array([sec.arc3d(i) / ta for i in range(n3d_n)])
+            af = np.array([sec.arc3d(i) / ta for i in range(n3d_n)]) # af stands for arc fractions, which are the normalized arc lengths of the segments within the section. 
+            #This allows us to find the segment corresponding to a specific position along the section's length.
             for seg in sec:
                 key     = f"{sec.name()}({seg.x:.3f})"
                 # Find the closest index/value match.
                 idx     = int(np.argmin(np.abs(af - seg.x)))
-                # Convert data into a NumPy array for vectorized numerical operations.
                 seg_xyz = np.array([sec.x3d(idx), sec.y3d(idx), sec.z3d(idx)])
                 # Compute straight-line distance between two coordinate points.
                 dist    = np.linalg.norm(node_xyz - seg_xyz)
@@ -1062,10 +1025,9 @@ def build_node_to_segment_map():
                     best_dist = dist
                     best_key  = key
         node_to_seg[nid] = best_key
-    # Return the final value(s) produced by this helper function.
     return node_to_seg
 
-
+# Choose a representative soma segment key for coloring the soma regionfor Morphology with 5 segments plot? 
 def choose_representative_soma_key(soma_segments, nodes):
     # Convert data into a NumPy array for vectorized numerical operations.
     soma_root_xyz = np.array([nodes[1]['x'], nodes[1]['y'], nodes[1]['z']])
@@ -1090,7 +1052,6 @@ def choose_representative_soma_key(soma_segments, nodes):
         if d < best_dist:
             best_dist = d
             best_key  = key
-    # Return the final value(s) produced by this helper function.
     return best_key
 
 
@@ -1114,17 +1075,14 @@ def build_segment_distance_from_stim():
             key     = f"{sec.name()}({seg.x:.3f})"
             # Find the closest index/value match.
             idx     = int(np.argmin(np.abs(af - seg.x)))
-            # Convert data into a NumPy array for vectorized numerical operations.
             seg_xyz[key] = np.array([sec.x3d(idx), sec.y3d(idx), sec.z3d(idx)])
 
     if stim_key not in seg_xyz:
-        # Stop execution with a clear error message because required data is missing.
+        # Stop execution with a clear error message because the expected stimulus segment key was not found in the segment coordinate map.
         raise ValueError(f"Stim segment {stim_key} not found in segment coordinate map.")
 
     stim_xyz = seg_xyz[stim_key]
-    # Return the final value(s) produced by this helper function.
     return {key: float(np.linalg.norm(xyz - stim_xyz)) for key, xyz in seg_xyz.items()}
-
 
 segment_distance_from_stim = build_segment_distance_from_stim()
 
@@ -1140,12 +1098,13 @@ def plot_morphology_gradient(nodes, node_order, node_to_segment, corr_values,
     norm = mcolors.Normalize(vmin=0.0, vmax=1.0)
     cmap = plt.cm.Reds
 
+    # Iterate through SWC nodes in order, drawing lines for morphology and coloring by metric value.
     for nid in node_order:
         node   = nodes[nid]
         parent = node['parent_id']
         if parent == -1:
             continue
-
+        
         seg_key    = node_to_segment.get(nid)
         metric_val = corr_values.get(seg_key, None)
         if metric_val is None and seg_key and ').' in seg_key:
@@ -1170,7 +1129,6 @@ def plot_morphology_gradient(nodes, node_order, node_to_segment, corr_values,
     ax.scatter(np.mean(soma_xs), np.mean(soma_ys),
                s=MS_SOMA, marker='o', color='gold',
                edgecolors='black', linewidths=1.5, zorder=5, label='Soma')
-    # Draw points marking segment metrics or key anatomical locations.
     ax.scatter(distal_xyz[0], distal_xyz[1],
                s=MS_STIM, marker='*', color='black',
                edgecolors='white', linewidths=1.0, zorder=6, label='Stim site')
@@ -1185,13 +1143,9 @@ def plot_morphology_gradient(nodes, node_order, node_to_segment, corr_values,
     ax.set_aspect('equal')
     # Set the panel title so the stimulus/metric being plotted is clear.
     ax.set_title(title, fontsize=FONT_TITLE, fontweight='bold')
-    # Label the horizontal axis with the correct variable and units.
     ax.set_xlabel("x (µm)", fontsize=FONT_LABEL)
-    # Label the vertical axis with the correct variable and units.
     ax.set_ylabel("y (µm)", fontsize=FONT_LABEL)
     ax.tick_params(labelsize=FONT_TICK)
-    # More transparent legend so morphology underneath is easier to see.
-    # Add a legend so the plotted colors/markers can be interpreted.
     ax.legend(
     fontsize=FONT_LEGEND,
     loc='upper right',
@@ -1199,11 +1153,8 @@ def plot_morphology_gradient(nodes, node_order, node_to_segment, corr_values,
     facecolor='white',
     edgecolor='black'
 )
-    # Hide unnecessary plot borders for a cleaner figure style.
     ax.spines['top'].set_visible(False)
-    # Hide unnecessary plot borders for a cleaner figure style.
     ax.spines['right'].set_visible(False)
-    # Adjust spacing so labels and panels do not overlap.
     plt.tight_layout()
     # Save the completed figure file for poster/report use.
     plt.savefig("neuron_morphology_gradient.png", dpi=150, bbox_inches='tight')
@@ -1248,34 +1199,25 @@ def select_five_traces(corr_values, stim_key, soma_segment_keys,
 
     keys = [stim_key, soma_key, lowest_key, median_key, highest_key]
 
+    # Define a helper function to generate labels for the selected traces based on their keys and whether they are soma or non-soma segments.
     def seg_label(key):
         if key == stim_key:
             if key in soma_index:
-                # Return the final value(s) produced by this helper function.
                 return f"Stim (S{soma_index[key]})"
-            # Check this alternate case only after the previous condition failed.
             elif key in non_soma_index:
-                # Return the final value(s) produced by this helper function.
-                return f"Stim ({non_soma_index[key]})"
-            # Return the final value(s) produced by this helper function.
+                return f"Stim ({non_soma_index[key]})" 
             return "Stim"
         if key is None:
-            # Return the final value(s) produced by this helper function.
             return "Soma"
         if key in soma_index:
-            # Return the final value(s) produced by this helper function.
             return f"Soma (S{soma_index[key]})"
-        # Check this alternate case only after the previous condition failed.
         elif key in non_soma_index:
-            # Return the final value(s) produced by this helper function.
             return f"Segment {non_soma_index[key]}"
-        # Return the final value(s) produced by this helper function.
         return "Segment"
 
     labels = [seg_label(stim_key), seg_label(soma_key),
               seg_label(lowest_key), seg_label(median_key), seg_label(highest_key)]
     colors = ['black', 'crimson', 'steelblue', 'darkorange', 'mediumseagreen']
-    # Return the final value(s) produced by this helper function.
     return keys, labels, colors
 
 
@@ -1308,11 +1250,8 @@ def plot_five_traces(ax, t, v, keys, labels, colors, title,
 
     # Limit the visible axis range to focus on the important part of the data.
     ax.set_xlim(0, x_end)
-    # Set the panel title so the stimulus/metric being plotted is clear.
     ax.set_title(title, fontsize=FONT_TITLE, fontweight='bold')
-    # Label the horizontal axis with the correct variable and units.
     ax.set_xlabel("Time (s)", fontsize=FONT_LABEL)
-    # Label the vertical axis with the correct variable and units.
     ax.set_ylabel("Voltage (mV)", fontsize=FONT_LABEL)
     ax.tick_params(labelsize=FONT_TICK)
     # More transparent legend so traces are less obstructed.
@@ -1324,11 +1263,8 @@ def plot_five_traces(ax, t, v, keys, labels, colors, title,
         facecolor='white',
         edgecolor='black'
     )
-    # Hide unnecessary plot borders for a cleaner figure style.
     ax.spines['top'].set_visible(False)
-    # Hide unnecessary plot borders for a cleaner figure style.
     ax.spines['right'].set_visible(False)
-    # Add a light grid to make values easier to read from the plot.
     ax.grid(alpha=0.18, lw=0.5)
 
 
@@ -1354,30 +1290,28 @@ print(f"  {'#':>4}  {'Class':<9}  {'Segment key':<50}  "
       f"{'x (um)':>10}  {'y (um)':>10}  {'z (um)':>10}  {'diam (um)':>10}")
 print("=" * 110)
 
-
+# Define a helper function to compute the 3D coordinates and diameter of a segment's center point based on its section and segment information.
 def seg_centre_xyz_diam(sec, seg):
     n3d_n = sec.n3d()
     if n3d_n == 0:
-        # Return the final value(s) produced by this helper function.
         return 0.0, 0.0, 0.0, 0.0
     ta = sec.arc3d(n3d_n - 1)
     if ta == 0:
-        # Return the final value(s) produced by this helper function.
         return 0.0, 0.0, 0.0, 0.0
     # Convert data into a NumPy array for vectorized numerical operations.
     af  = np.array([sec.arc3d(i) / ta for i in range(n3d_n)])
     # Find the closest index/value match.
     idx = int(np.argmin(np.abs(af - seg.x)))
-    # Return the final value(s) produced by this helper function.
     return sec.x3d(idx), sec.y3d(idx), sec.z3d(idx), sec.diam3d(idx)
 
-
+# Print a table of segment keys, their classes (soma/non-soma), and their 3D coordinates/diameter for the selected segments.
 for sec, seg in soma_segments:
     key         = f"{sec.name()}({seg.x:.3f})"
     idx         = soma_index[key]
     x, y, z, d = seg_centre_xyz_diam(sec, seg)
     print(f"  {idx:>4}  {'SOMA':<9}  {key:<50}  {x:>10.1f}  {y:>10.1f}  {z:>10.1f}  {d:>10.3f}")
 
+# Only show the first 30 non-soma segments in the table for readability, but count all of them in the total.
 for sec, seg in non_soma_segments:
     key         = f"{sec.name()}({seg.x:.3f})"
     idx         = non_soma_index[key]
@@ -1388,22 +1322,22 @@ print("=" * 110)
 print(f"  Total soma: {len(soma_segments)}   Total non-soma: {len(non_soma_segments)}")
 print("=" * 110)
 
-
+# Define a helper function to build a color map for the selected segments based on their keys and assigned colors.
 def build_selected_colour_map(keys, colors):
-    # Return the final value(s) produced by this helper function.
     return {k: c for k, c in zip(keys, colors) if k is not None}
 
-
+# Build color maps for the selected segments in both runs, and combine them into a single map for coloring the morphology skeleton.
 colour_map1        = build_selected_colour_map(keys1, trace_colors)
 colour_map2        = build_selected_colour_map(keys2, trace_colors)
 colour_map_combined = {**colour_map1, **colour_map2}
 
+# Check if the representative soma segment key is present in the combined color map, and if not, add it with a default color (crimson) while printing a warning message.
 soma_key_check = soma_segment_keys[0] if soma_segment_keys else None
 if soma_key_check and soma_key_check not in colour_map_combined:
     colour_map_combined[soma_key_check] = 'crimson'
     print(f"  WARNING: soma key was missing from colour map — force-added: {soma_key_check}")
 
-
+# Draw the morphology skeleton with edges colored by the selected segments, and include the stimulus site and distal point for context.
 def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
                             selected_colour_map, soma_node_ids,
                             stim_key, distal_xyz, title="Morphology skeleton"):
@@ -1424,7 +1358,6 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
             if key in selected_colour_map:
                 # Find the closest index/value match.
                 idx = int(np.argmin(np.abs(af - seg.x)))
-                # Convert data into a NumPy array for vectorized numerical operations.
                 selected_seg_xyz[key] = np.array([sec.x3d(idx),
                                                    sec.y3d(idx),
                                                    sec.z3d(idx)])
@@ -1432,6 +1365,7 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
     edge_colours   = {}
     keys_with_edge = set()
 
+    # Iterate through SWC nodes in order, determining edge colors based on the selected segments and building a set of segment keys that have at least one edge colored.
     for nid in node_order:
         node   = nodes[nid]
         parent = node['parent_id']
@@ -1444,6 +1378,7 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
             # Add this item to a set for fast membership checking without duplicates.
             keys_with_edge.add(seg_key)
 
+    # For any selected segment keys that don't have an edge colored (e.g., because they are near the soma or isolated), find the nearest node and color an edge to that node as a fallback.
     for key, seg_xyz in selected_seg_xyz.items():
         if key in keys_with_edge:
             continue
@@ -1451,7 +1386,6 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
         best_dist = float('inf')
         for nid in node_order:
             nd = nodes[nid]
-            # Convert data into a NumPy array for vectorized numerical operations.
             d  = np.linalg.norm(seg_xyz - np.array([nd['x'], nd['y'], nd['z']]))
             if d < best_dist:
                 best_dist = d
@@ -1460,7 +1394,6 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
             parent = nodes[best_nid]['parent_id']
             if parent != -1:
                 edge_colours[(parent, best_nid)] = selected_colour_map[key]
-            # Use this fallback when the earlier condition is not true.
             else:
                 for child_nid in node_order:
                     if nodes[child_nid]['parent_id'] == best_nid:
@@ -1468,6 +1401,7 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
                         # Exit the loop because the traversal/calculation is complete for this path.
                         break
 
+    # Iterate through SWC nodes in order again, this time drawing the edges with the determined colors and widths based on whether they are part of the selected segments, near the soma, or axon-labeled.                     
     for nid in node_order:
         node   = nodes[nid]
         parent = node['parent_id']
@@ -1490,6 +1424,7 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
         ax.plot([x0, x1], [y0, y1], color=draw_color, lw=lw,
                 solid_capstyle='round', zorder=2)
 
+    # Iterate through SWC nodes in order again, this time drawing the edges with the determined colors and widths based on whether they are part of the selected segments, near the soma, or axon-labeled.
     for nid in node_order:
         node   = nodes[nid]
         parent = node['parent_id']
@@ -1505,6 +1440,7 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
         ax.plot([x0, x1], [y0, y1], color=color, lw=lw,
                 solid_capstyle='round', zorder=5)
 
+    # Find the SWC node closest to the stimulus segment for drawing a marker, since the stimulus segment itself may not correspond to an actual SWC node.
     stim_node      = None
     stim_node_dist = float('inf')
     for nid, seg_key in node_to_segment.items():
@@ -1517,12 +1453,14 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
                 stim_node_dist = d
                 stim_node      = nid
 
+    # Draw points marking the soma region, stimulus site, or other key anatomical locations with distinct markers and colors for visibility.
     if stim_node is not None:
         # Draw points marking segment metrics or key anatomical locations.
         ax.scatter(nodes[stim_node]['x'], nodes[stim_node]['y'],
                    s=MS_STIM, marker='*', color='black', zorder=6,
                    label='Stim site', edgecolors='white', linewidths=1.5)
 
+    # Build a legend with unique colors for the selected segments, and include entries for the stimulus site and detected axon segments. The legend will help interpret the colors used in the plot.
     legend_handles = []
     seen_colors    = set()
     for key, label, color in zip(keys1, labels1, trace_colors):
@@ -1537,16 +1475,11 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
     legend_handles.append(
         plt.Line2D([0], [0], color='cyan', lw=LW_SKEL_AXON, label='Axon (detected)'))
 
-    ax.set_aspect('equal')
-    # Set the panel title so the stimulus/metric being plotted is clear.
+    ax.set_aspect('equal') # Ensure equal scaling of x and y axes so morphology is not distorted.
     ax.set_title(title, fontsize=FONT_TITLE, fontweight='bold')
-    # Label the horizontal axis with the correct variable and units.
     ax.set_xlabel("x (µm)", fontsize=FONT_LABEL)
-    # Label the vertical axis with the correct variable and units.
     ax.set_ylabel("y (µm)", fontsize=FONT_LABEL)
     ax.tick_params(labelsize=FONT_TICK)
-    # Put the morphology/tree legend in the bottom-left corner
-    # and make the legend box more transparent so data behind it stays visible.
     # Add a legend so the plotted colors/markers can be interpreted.
     ax.legend(
         handles=legend_handles,
@@ -1564,37 +1497,30 @@ def draw_skeleton_selected(ax, nodes, node_order, node_to_segment,
 
 def plot_current_waveform(ax, t, stim_delay_ms, stim_dur_ms, amp_nA, title):
     t_s             = t / 1000.0
-    i_wave          = np.zeros_like(t)
-    on_mask         = (t >= stim_delay_ms) & (t <= stim_delay_ms + stim_dur_ms)
-    i_wave[on_mask] = amp_nA
+    i_wave          = np.zeros_like(t) # Initialize an array of zeros with the same shape as the time array to hold the current waveform values.
+    on_mask         = (t >= stim_delay_ms) & (t <= stim_delay_ms + stim_dur_ms) # Create a boolean mask that is True for time points where the stimulus is on (between stim_delay_ms and stim_delay_ms + stim_dur_ms) and False elsewhere.
+    i_wave[on_mask] = amp_nA # Set the current waveform values to amp_nA for the time points where the stimulus is on, creating a rectangular pulse shape for the current injection.
 
     # Fill the area under the current waveform to make injection timing obvious.
     ax.fill_between(t_s, i_wave, step='post',
                     color='steelblue', alpha=0.35, label='Current (nA)')
-    # Draw a line showing morphology edges, current waveform, or voltage trace data.
+
     ax.plot(t_s, i_wave, color='steelblue', lw=1.5, drawstyle='steps-post')
 
-    # Draw a vertical reference line for stimulus timing or filter thresholds.
+    # Draw a vertical reference lines for stimulus timing or filter thresholds.
     ax.axvline(stim_delay_ms / 1000.0, color='dimgrey',
                lw=1.0, linestyle='--', alpha=0.7, label='Stim onset')
-    # Draw a vertical reference line for stimulus timing or filter thresholds.
     ax.axvline((stim_delay_ms + stim_dur_ms) / 1000.0, color='salmon',
                lw=1.0, linestyle='--', alpha=0.7, label='Stim offset')
 
-    # Limit the visible axis range to focus on the important part of the data.
     ax.set_ylim(-amp_nA * 0.15, amp_nA * 1.30)
     # FIX #11: removed the internal ax.set_xlim(0, t_s[-1]) that was immediately
     # overridden by the caller; the caller's xlim is the authoritative one.
 
-    # Set the panel title so the stimulus/metric being plotted is clear.
     ax.set_title(title, fontsize=FONT_TITLE, fontweight='bold')
-    # Label the horizontal axis with the correct variable and units.
     ax.set_xlabel("Time (s)", fontsize=FONT_LABEL)
-    # Label the vertical axis with the correct variable and units.
     ax.set_ylabel("Current (nA)", fontsize=FONT_LABEL)
     ax.tick_params(labelsize=FONT_TICK)
-    # More transparent legend so the current waveform remains visible behind it.
-    # Add a legend so the plotted colors/markers can be interpreted.
     ax.legend(
         fontsize=FONT_LEGEND,
         loc='upper right',
@@ -1602,11 +1528,8 @@ def plot_current_waveform(ax, t, stim_delay_ms, stim_dur_ms, amp_nA, title):
         facecolor='white',
         edgecolor='black'
     )
-    # Hide unnecessary plot borders for a cleaner figure style.
     ax.spines['top'].set_visible(False)
-    # Hide unnecessary plot borders for a cleaner figure style.
     ax.spines['right'].set_visible(False)
-    # Add a light grid to make values easier to read from the plot.
     ax.grid(alpha=0.18, lw=0.5)
 
 
@@ -1624,15 +1547,11 @@ gs  = fig.add_gridspec(
     wspace=0.16
 )
 
-# Allocate subplot space so related panels appear in one organized figure.
+# Allocate subplots space so related panels appear in one organized figure.
 ax_morph = fig.add_subplot(gs[:, 0])
-# Allocate subplot space so related panels appear in one organized figure.
 ax_curr1 = fig.add_subplot(gs[0, 1])
-# Allocate subplot space so related panels appear in one organized figure.
 ax_curr2 = fig.add_subplot(gs[0, 2])
-# Allocate subplot space so related panels appear in one organized figure.
 ax_volt1 = fig.add_subplot(gs[1, 1])
-# Allocate subplot space so related panels appear in one organized figure.
 ax_volt2 = fig.add_subplot(gs[1, 2])
 
 draw_skeleton_selected(
@@ -1647,18 +1566,15 @@ draw_skeleton_selected(
 
 plot_current_waveform(ax_curr1, t1, stim_delay_ms=100, stim_dur_ms=1.0,
                       amp_nA=I_AMP, title="Current injection — Burst (1 ms)")
-# Limit the visible axis range to focus on the important part of the data.
 ax_curr1.set_xlim(0.08, 0.15)
 
 plot_current_waveform(ax_curr2, t2, stim_delay_ms=100, stim_dur_ms=1000.0,
                       amp_nA=I_AMP, title="Current injection — Sustained (1 s)")
-# Limit the visible axis range to focus on the important part of the data.
 ax_curr2.set_xlim(0, 1.5)
 
 plot_five_traces(ax_volt1, t1, v1, keys=keys1, labels=labels1, colors=trace_colors,
                  title="Voltage responses — Burst (1 ms)",
                  stim_delay_ms=100, stim_dur_ms=1.0)
-# Limit the visible axis range to focus on the important part of the data.
 ax_volt1.set_xlim(0.08, 0.15)
 
 plot_five_traces(ax_volt2, t2, v2, keys=keys2, labels=labels2, colors=trace_colors,
@@ -1682,14 +1598,14 @@ plt.show()
 
 
 # ===================================================================================================
-# STEP 9 — TTM/FWHM VISUALIZATION, SHAPE FILTERING, CLUSTERING, FILTERED PLOTS, AND JSON EXPORT
+# STEP 9 — SHAPE FILTERING, CLUSTERING, FILTERED PLOTS, AND JSON EXPORT
 # ===================================================================================================
 
 # FIX #2/#3/#4/#5/#6: All duplicate function definitions that were repeated in Steps 9-13
 # have been removed. The single canonical definitions above are used throughout.
 
 # ---------------------------------------------------------------------------------------------------
-# Helper: build trace feature matrix for clustering
+# Helper: build trace feature matrix for clustering for the plot in Step 9, and also for JSON export in Step 13
 # ---------------------------------------------------------------------------------------------------
 def build_trace_feature_matrix(v_dict, all_keys, t, t_start, t_end):
     mask       = (t >= t_start) & (t <= t_end)
@@ -1703,12 +1619,11 @@ def build_trace_feature_matrix(v_dict, all_keys, t, t_start, t_end):
         baseline = np.mean(trace[t < t_start])
         X.append(trace[mask] - baseline)
         valid_keys.append(key)
-    # Return the final value(s) produced by this helper function.
     return valid_keys, np.array(X)
 
 
 # ---------------------------------------------------------------------------------------------------
-# Helper: cluster filtered segments
+# Helper: cluster filtered segments 
 # ---------------------------------------------------------------------------------------------------
 def cluster_segments_by_trace_similarity(v_dict, all_keys, t, t_start, t_end, n_clusters=5):
     valid_keys, X = build_trace_feature_matrix(v_dict, all_keys, t, t_start, t_end)
@@ -1735,23 +1650,20 @@ def cluster_segments_by_trace_similarity(v_dict, all_keys, t, t_start, t_end, n_
 
 
 # ---------------------------------------------------------------------------------------------------
-# Helper: reorder clusters so cluster 0 is most stim-like
+# Helper: reorder clusters so cluster 0 is most stim-like 
 # ---------------------------------------------------------------------------------------------------
 def reorder_clusters_by_similarity_to_stim(cluster_ids, att_values, k):
     if k == 0 or len(cluster_ids) == 0:
-        # Return the final value(s) produced by this helper function.
         return {}
     cluster_means = []
     for c in range(k):
         vals     = [att_values[key] for key, cc in cluster_ids.items()
                     if cc == c and key in att_values]
-        # Compute the mean used as a baseline or summary value.
         mean_val = np.mean(vals) if vals else -np.inf
         cluster_means.append((c, mean_val))
     # Sort these values so ranking/order-based selection is deterministic.
     cluster_means.sort(key=lambda x: x[1], reverse=True)
     old_to_new = {old: new for new, (old, _) in enumerate(cluster_means)}
-    # Return the final value(s) produced by this helper function.
     return {key: old_to_new[c] for key, c in cluster_ids.items()}
 
 
@@ -1778,13 +1690,9 @@ def plot_voltage(ax, t, v, keys_to_plot, cluster_ids, cluster_colors,
     if len(valid_keys) == 0:
         ax.text(0.5, 0.5, "No clustered segments to plot",
                 ha='center', va='center', transform=ax.transAxes, fontsize=FONT_TICK)
-        # Set the panel title so the stimulus/metric being plotted is clear.
         ax.set_title(title)
-        # Label the horizontal axis with the correct variable and units.
         ax.set_xlabel("Time (s)")
-        # Label the vertical axis with the correct variable and units.
         ax.set_ylabel("Voltage (mV)")
-        # Add a light grid to make values easier to read from the plot.
         ax.grid(True, alpha=0.25)
         return
 
@@ -1806,28 +1714,21 @@ def plot_voltage(ax, t, v, keys_to_plot, cluster_ids, cluster_colors,
                 label=f"Stimulated: {segment_labels.get(stim_key, stim_key)}")
         cluster_handle['stim'] = plt.Line2D([], [], color='black', lw=2, label="Stimulated")
 
-    # Draw a horizontal reference line for baseline or filter thresholds.
     ax.axhline(-65, linestyle='--', color='k', alpha=0.3)
-    # Set the panel title so the stimulus/metric being plotted is clear.
     ax.set_title(title, fontsize=FONT_TITLE, fontweight='bold')
-    # Label the horizontal axis with the correct variable and units.
     ax.set_xlabel("Time (s)", fontsize=FONT_LABEL)
-    # Label the vertical axis with the correct variable and units.
     ax.set_ylabel("Voltage (mV)", fontsize=FONT_LABEL)
     ax.tick_params(labelsize=FONT_TICK)
-    # Add a light grid to make values easier to read from the plot.
     ax.grid(True)
 
-    # Sort these values so ranking/order-based selection is deterministic.
     handles = [cluster_handle[c] for c in sorted(c for c in cluster_handle if c != 'stim')]
     if 'stim' in cluster_handle:
         handles.append(cluster_handle['stim'])
-    # Add a legend so the plotted colors/markers can be interpreted.
     ax.legend(handles=handles, loc='upper right', fontsize=FONT_LEGEND)
 
 
 # ---------------------------------------------------------------------------------------------------
-# Helper: cluster similarity / distance panel
+# Helper: cluster similarity / distance panel for the branch order + distance plot 
 # ---------------------------------------------------------------------------------------------------
 def plot_cluster_similarity_distance_panel(
     att_values, cluster_ids, cluster_colors, all_keys,
@@ -1836,13 +1737,9 @@ def plot_cluster_similarity_distance_panel(
     if k <= 0:
         ax.text(0.5, 0.5, "No clustered segments available",
                 ha='center', va='center', transform=ax.transAxes, fontsize=FONT_TICK)
-        # Set the panel title so the stimulus/metric being plotted is clear.
         ax.set_title(title)
-        # Label the horizontal axis with the correct variable and units.
         ax.set_xlabel("Cluster number")
-        # Label the vertical axis with the correct variable and units.
         ax.set_ylabel("Peak ratio vs stimulated segment")
-        # Add a light grid to make values easier to read from the plot.
         ax.grid(True, alpha=0.25)
         return
 
@@ -1863,7 +1760,6 @@ def plot_cluster_similarity_distance_panel(
         if not keys_c:
             continue
 
-        # Convert data into a NumPy array for vectorized numerical operations.
         dvals = np.array([dist_map.get(key, np.nan) for key in keys_c], dtype=float)
         valid = np.isfinite(dvals)
         keys_c = [key for key, ok in zip(keys_c, valid) if ok]
@@ -1920,23 +1816,17 @@ def plot_cluster_similarity_distance_panel(
             ax.annotate(txt, (x, y), fontsize=FONT_TICK - 2, ha='center', va='bottom',
                         xytext=(0, 4), textcoords='offset points')
 
-    # Limit the visible axis range to focus on the important part of the data.
     ax.set_xlim(-0.5, k - 0.5)
-    # Limit the visible axis range to focus on the important part of the data.
     ax.set_ylim(-0.14, 1.05)
     ax.set_xticks(cluster_centers)
     ax.set_xticklabels([f"{c}" for c in range(k)], fontsize=FONT_TICK)
-    # Label the horizontal axis with the correct variable and units.
     ax.set_xlabel(
     "Branch order (within each order, horizontal position = distance from stim site [µm])",
     fontsize=FONT_LABEL
     )
-    # Label the vertical axis with the correct variable and units.
     ax.set_ylabel("Peak ratio vs stimulated segment", fontsize=FONT_LABEL)
-    # Set the panel title so the stimulus/metric being plotted is clear.
     ax.set_title(title, fontsize=FONT_TITLE, fontweight='bold')
     ax.tick_params(labelsize=FONT_TICK)
-    # Add a light grid to make values easier to read from the plot.
     ax.grid(alpha=0.25, axis='y')
 
     cluster_handles = [
@@ -1947,7 +1837,6 @@ def plot_cluster_similarity_distance_panel(
     ]
     soma_handle = plt.Line2D([0], [0], marker='D', color='w',
                              markerfacecolor='grey', markersize=12, label='Soma segment')
-    # Add a legend so the plotted colors/markers can be interpreted.
     ax.legend(handles=cluster_handles + [soma_handle], loc='upper right',
               fontsize=FONT_LEGEND, framealpha=0.9)
     ax.text(-0.48, axis_y - 0.005, "Distance (µm)",
@@ -1984,7 +1873,7 @@ def print_cluster_table(att_values, cluster_ids, all_keys,
 
 
 # ---------------------------------------------------------------------------------------------------
-# PART B — Run clustering
+# Run clustering
 # NOTE: The TTM/FWHM filter scatter is deferred to the very end of the script (Step 15)
 # so it appears AFTER all analysis plots rather than before them.
 # FIX #1: clust1/clust2/k1/k2 are now ASSIGNED HERE before any code tries to use them.
@@ -2039,11 +1928,6 @@ print("Saved: neuron_voltage_clustered.png")
 plt.show()
 
 # ---------------------------------------------------------------------------------------------------
-# PART F — cluster similarity / distance panel removed:
-#           the branch-order plot (Step 14) is the primary spatial view.
-# ---------------------------------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------------------------------
 # build_seg_key_to_branch_level — defined here so it is available for the JSON
 # export in Part G below AND for the branch-order plot in Step 14.
 # ---------------------------------------------------------------------------------------------------
@@ -2078,7 +1962,6 @@ def build_seg_key_to_branch_level(nodes, node_order, children, node_to_segment):
         kids = children[nid]
         if len(kids) >= 2:
             next_level = level + 1
-        # Use this fallback when the earlier condition is not true.
         else:
             next_level = level
 
@@ -2095,7 +1978,6 @@ def build_seg_key_to_branch_level(nodes, node_order, children, node_to_segment):
         if seg_key not in seg_key_to_level or lvl < seg_key_to_level[seg_key]:
             seg_key_to_level[seg_key] = lvl
 
-    # Return the final value(s) produced by this helper function.
     return seg_key_to_level, node_level
 
 
@@ -2110,7 +1992,7 @@ print(f"\nBranch order range: 1 – {max_level_found}")
 print(f"Segments with branch-order assignment: {len(seg_key_to_branch_level)}")
 
 # ---------------------------------------------------------------------------------------------------
-# PART G — JSON export
+# JSON export
 # FIX #8 / #9: corrected two broken dict literals where a closing brace was missing,
 # causing the next key to be parsed as part of the preceding value.
 # ---------------------------------------------------------------------------------------------------
@@ -2230,7 +2112,7 @@ for nid in node_order:
 # ===================================================================================================
 
 # seg_key_to_branch_level and node_level_map are already built before the JSON
-# export (after Part F). build_seg_key_to_branch_level() is defined above Part F.
+# export (after Json Export part). build_seg_key_to_branch_level() is defined above in the Json Export part.
 
 
 # Add legend_loc so each stimulus panel can place its legend differently.
@@ -2285,7 +2167,6 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
         keys_lvl = [k for k in keys_present if seg_key_to_level.get(k, 1) == lvl]
 
         # Collect valid distances for this branch order
-        # Convert data into a NumPy array for vectorized numerical operations.
         dvals = np.array([segment_distance_from_stim.get(k, np.nan) for k in keys_lvl], dtype=float)
         valid = np.isfinite(dvals)
         keys_lvl = [k for k, ok in zip(keys_lvl, valid) if ok]
@@ -2306,7 +2187,6 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
         x_right  = x_center + local_halfwidth
 
         # Draw the horizontal ruler line
-        # Draw a line showing morphology edges, current waveform, or voltage trace data.
         ax.plot([x_left, x_right], [axis_y, axis_y],
                 color='black', lw=0.9, zorder=1, clip_on=False)
 
@@ -2345,12 +2225,10 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
                 marker = 's'
                 color  = 'cyan'
                 size   = MS_DOT_BRANCH
-            # Check this alternate case only after the previous condition failed.
             elif key in soma_index:
                 marker = 'D'
                 color  = cluster_colors.get(c, '#888888') if c is not None else '#888888'
                 size   = MS_DOT_BRANCH
-            # Use this fallback when the earlier condition is not true.
             else:
                 marker = 'o'
                 color  = cluster_colors.get(c, '#cccccc') if c is not None else '#cccccc'
@@ -2367,10 +2245,8 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
 
         # Place stim star using the same local distance ruler logic
         keys_lvl = [k for k in keys_present if seg_key_to_branch_level.get(k, 1) == lvl_s]
-        # Convert data into a NumPy array for vectorized numerical operations.
         dvals = np.array([segment_distance_from_stim.get(k, np.nan) for k in keys_lvl], dtype=float)
         dvals = dvals[np.isfinite(dvals)]
-        # Compute the maximum used for peak detection or normalization.
         dmax = float(np.max(dvals)) if len(dvals) else 1.0
         if dmax <= 0:
             dmax = 1.0
@@ -2386,7 +2262,8 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
                    zorder=6, label='Stimulated segment',
                    edgecolors='white', linewidths=1.0)
 
-    # Optional axon annotation
+    # This code block adds a labeled annotation arrow pointing to the axon on the branch-order 
+    # correlation plot. Here's what each part does:
     axon_orders = [seg_key_to_level.get(key, 1)
                    for key in keys_present if seg_is_axon.get(key, False)]
     if axon_orders:
@@ -2397,15 +2274,14 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
 
         ax.annotate(
             "Axon",
-            xy=(ann_x, ann_y),
-            xytext=(ann_x + 0.6, ann_y + 0.12),
+            xy=(ann_x, ann_y), # Arrow points HERE (median axon position)
+            xytext=(ann_x + 0.6, ann_y + 0.12), # Label appears HERE (offset up/right)
             ha='left', va='bottom',
             fontsize=FONT_ANNOT, color='darkcyan', fontweight='bold',
             arrowprops=dict(arrowstyle='->', color='darkcyan', lw=1.8),
             bbox=dict(boxstyle='round,pad=0.3', fc='white', ec='darkcyan', alpha=0.9)
         )
 
-    # Baseline
     # Draw a horizontal reference line for baseline or filter thresholds.
     ax.axhline(0, color='k', lw=1.0, linestyle='--', alpha=0.4)
 
@@ -2414,24 +2290,17 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
     ax.set_xticklabels([f"{i}" for i in range(1, max_lvl + 1)], fontsize=FONT_TICK + 2)
     # Horizontal position inside each branch-order group represents local distance from
     # the stimulated site; the local ruler labels carry the unit in µm.
-    # Label the horizontal axis with the correct variable and units.
     ax.set_xlabel(
         "Branch order (within each order, horizontal position shows distance from stim site)",
         fontsize=FONT_LABEL + 2
     )
-    # Label the vertical axis with the correct variable and units.
     ax.set_ylabel("Peak ratio vs stimulated segment", fontsize=FONT_LABEL + 2)
-    # Limit the visible axis range to focus on the important part of the data.
     ax.set_xlim(0.3, max_lvl + 0.7)
-    # Limit the visible axis range to focus on the important part of the data.
     ax.set_ylim(-0.14, 1.05)
-    # Set the panel title so the stimulus/metric being plotted is clear.
     ax.set_title(title, fontsize=FONT_TITLE, fontweight='bold')
     ax.tick_params(labelsize=FONT_TICK)
-    # Add a light grid to make values easier to read from the plot.
     ax.grid(alpha=0.25, axis='y')
 
-    # Legend
     cluster_handles = [
         plt.Line2D([0], [0], marker='o', color='w',
                    markerfacecolor=cluster_colors.get(c, 'lightcoral'),
@@ -2451,7 +2320,6 @@ def plot_branch_correlation_dotplot(corr_values, cluster_ids, cluster_colors,
         color='black', lw=1.2,
         label='Local ruler: 0 → max distance [µm]'
     )
-    # Add a legend so the plotted colors/markers can be interpreted.
     ax.legend(
         handles=cluster_handles + [stim_handle, soma_handle, axon_handle, distance_handle],
         loc=legend_loc,
